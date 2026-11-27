@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type EnterpriseRetailProviderOperation } from "@prisma/client";
 import type { z } from "zod";
 import { transitionRetailProviderOperation } from "@/lib/enterprise/retail/customer-payments";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -10,7 +10,7 @@ import {
   type RetailProviderResult,
 } from "@/lib/enterprise/retail/payment-provider-adapter";
 import { mobileMoneyCreateSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
-import { createMobileMoneyTransaction, createTelcoTopup } from "@/lib/enterprise/retail/service";
+import { assertConnectedMobileMoneyIntentTx, createMobileMoneyTransaction, createTelcoTopup } from "@/lib/enterprise/retail/service";
 import { finalizeTelcoTopupAccounting } from "@/lib/enterprise/retail/telco-accounting";
 import { prisma } from "@/lib/prisma";
 
@@ -122,18 +122,18 @@ async function getOrCreatePendingOperation(args: {
   idempotencyKey: string;
   timeoutMs: number;
   retryMs: number;
-}) {
+  validateIntent?: (existing: EnterpriseRetailProviderOperation | null) => Promise<void>;
+}, db: Prisma.TransactionClient = prisma) {
   const providerKey = `operator:${args.idempotencyKey}`;
-  const existing = await prisma.enterpriseRetailProviderOperation.findFirst({
+  const existing = await db.enterpriseRetailProviderOperation.findFirst({
     where: { organizationId: args.organizationId, idempotencyKey: providerKey },
   });
-  if (existing) {
-    if (existing.providerId !== args.providerId) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
-    return { operation: existing, idempotent: true };
-  }
+  if (existing && existing.providerId !== args.providerId) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  await args.validateIntent?.(existing);
+  if (existing) return { operation: existing, idempotent: true };
 
   const now = Date.now();
-  const operation = await prisma.enterpriseRetailProviderOperation.create({
+  const operation = await db.enterpriseRetailProviderOperation.create({
     data: {
       organizationId: args.organizationId,
       providerId: args.providerId,
@@ -268,6 +268,24 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
   return null;
 }
 
+function assertSameMobileMoneyIntent(existing: EnterpriseRetailProviderOperation, actorUserId: string, input: MobileMoneyInput) {
+  const parsed = mobileMoneyCreateSchema.safeParse(existing.requestPayloadJson);
+  if (!parsed.success || existing.createdByUserId !== actorUserId ||
+      (existing.sourceEntityType !== PENDING_MOBILE_MONEY && existing.sourceEntityType !== ACTUAL_MOBILE_MONEY)) {
+    throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  }
+  const saved = parsed.data;
+  if (
+    saved.idempotencyKey !== input.idempotencyKey || saved.providerCode !== input.providerCode ||
+    saved.cashAccountId !== input.cashAccountId || saved.currencyCode !== input.currencyCode ||
+    saved.transactionType !== input.transactionType || saved.customerPhone !== input.customerPhone ||
+    saved.principalAmount !== input.principalAmount || saved.customerFeeAmount !== input.customerFeeAmount ||
+    saved.feeCollectionMode !== input.feeCollectionMode || saved.providerCommissionAmount !== input.providerCommissionAmount ||
+    saved.occurredAt?.getTime() !== input.occurredAt?.getTime()
+  ) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  return saved;
+}
+
 export async function createConnectedMobileMoneyOperation(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
   const connected = await resolveConnectedProvider(organizationId, input.providerCode, ["MOBILE_MONEY", "BOTH"]);
   if (!connected) return null;
@@ -275,7 +293,7 @@ export async function createConnectedMobileMoneyOperation(organizationId: string
     ...input,
     ...(input.occurredAt ? { occurredAt: input.occurredAt.toISOString() } : {}),
   };
-  const pending = await getOrCreatePendingOperation({
+  const pending = await prisma.$transaction(tx => getOrCreatePendingOperation({
     organizationId,
     actorUserId,
     providerId: connected.provider.id,
@@ -287,7 +305,11 @@ export async function createConnectedMobileMoneyOperation(organizationId: string
     idempotencyKey: input.idempotencyKey,
     timeoutMs: providerTimeoutMs(connected.integration.settingsJson),
     retryMs: providerRetryMs(connected.integration.settingsJson),
-  });
+    validateIntent: async existing => {
+      const intent = existing ? assertSameMobileMoneyIntent(existing, actorUserId, input) : input;
+      await assertConnectedMobileMoneyIntentTx(tx, organizationId, actorUserId, intent, existing !== null);
+    },
+  }, tx), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   const operation = pending.idempotent
     ? pending.operation
     : await initiateProviderOperation({

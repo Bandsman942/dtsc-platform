@@ -302,3 +302,9 @@ Lint ciblé et régression complète locaux réussis avant rédaction ; contrôl
 ### Profil et correction des lectures lentes
 
 Le [profil du run 45692406975](https://github.com/Bandsman942/dtsc-platform/actions/runs/45692406975) isole le comptage de dépôts à 12 955 ms ; sélection de page, comptage ORM et premier lot environ 1 600 ms chacun. Total première lecture 18 336 ms, budget refusé. Le comptage de dépôts/mouvements matérialise maintenant une fois sa sélection autorisée avant la jointure ; pagination et comptage reprennent la sélection SQL déjà tenant/boutique/filtre-scoped, puis ne chargent que les clés de la page. Aucun élargissement de droits ni modification FEFO ; seuils 10 s / 30 s conservés, résultat CI à vérifier. Le comportement de matérialisation est documenté dans [PostgreSQL 16, section 7.8.3](https://www.postgresql.org/docs/16/queries-with.html#QUERIES-WITH-CTE-MATERIALIZATION). Aucun ANALYZE forcé, désactivation du planificateur/JIT ou changement de timeout pour faire passer le test.
+
+### Contrôles avant transmission Mobile Money connectée
+
+La demande connectée réutilise la résolution des comptes, de la session ouverte et des effets de caisse et de float de l’opération locale. Les droits et les fonds sont contrôlés dans la transaction qui enregistre la demande. La transmission fournisseur intervient après son enregistrement. Une demande identique du même caissier reprend son statut après vérification du périmètre actuel. La vérification de solde porte sur l’instant de la demande. Le traitement différé peut toujours rencontrer une session fermée ou un solde modifié entre l’envoi et la confirmation.
+
+La fixture PostgreSQL #1228 couvre le rejet hors boutique, la session absente, l’insuffisance de fonds et le rejeu d’une demande en attente. Elle utilise un adaptateur simulé pour compter les transmissions et un périmètre boutique simulé. La recette connectée avec un adaptateur d’intégration reste requise.

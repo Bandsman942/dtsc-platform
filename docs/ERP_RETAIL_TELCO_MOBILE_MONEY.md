@@ -253,6 +253,8 @@ Cette capacité est un module spécialisé du sous-type `SHOP` dans le registre 
 
 L’agent sélectionne l’opérateur, le type `DEPOSIT`/`WITHDRAWAL`, le téléphone, le principal, les frais/commissions et la référence opérateur. Le wallet financier n’est pas choisi arbitrairement par l’agent : la devise de la caisse ouverte détermine la devise de l’opération et le serveur résout le wallet du même opérateur dans cette devise.
 
+En mode connecté, le service refuse l’envoi si la caisse ou le float est hors du périmètre autorisé (403), si la session de caisse du caissier est fermée ou si le solde nécessaire est insuffisant (409). Il conserve la demande avant son envoi. En cas de rejeu, le caissier doit toujours avoir accès à la caisse et au float. Le serveur refuse une même référence pour un caissier ou une opération différente (409). La confirmation différée vérifie de nouveau que les mouvements peuvent être enregistrés.
+
 ### Contrat de formulaires Mobile Money — #512
 
 Tous les formulaires de ce module suivent `docs/FORM_UX_CONTRACT.md` :

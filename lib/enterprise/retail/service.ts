@@ -99,6 +99,19 @@ async function assertOpenCashSession(tx: Prisma.TransactionClient, organizationI
   return session;
 }
 
+function assertSufficientAccountEffect(
+  account: { id: string; operationalBalance: Prisma.Decimal },
+  effect: Prisma.Decimal,
+  hideAvailableBalance = false,
+) {
+  if (effect.lessThan(0) && account.operationalBalance.lessThan(effect.abs())) {
+    const requiredAmount = effect.abs().toFixed();
+    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, hideAvailableBalance
+      ? { requiredAmount }
+      : { financialAccountId: account.id, requiredAmount, availableBalance: account.operationalBalance.toFixed() });
+  }
+}
+
 async function applyAccountEffectTx(
   tx: Prisma.TransactionClient,
   input: {
@@ -117,9 +130,7 @@ async function applyAccountEffectTx(
   if (input.effect.isZero()) return;
   const outbound = input.effect.isNegative();
   const amount = input.effect.abs();
-  if (outbound && input.account.operationalBalance.lessThan(amount)) {
-    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, input.hideAvailableBalance ? { requiredAmount: amount.toFixed() } : { financialAccountId: input.account.id, requiredAmount: amount.toFixed(), availableBalance: input.account.operationalBalance.toFixed() });
-  }
+  assertSufficientAccountEffect(input.account, input.effect, input.hideAvailableBalance);
   await tx.enterpriseFinancialAccount.update({
     where: { id: input.account.id },
     data: { operationalBalance: outbound ? { decrement: amount } : { increment: amount }, revision: { increment: 1 } },
@@ -459,6 +470,60 @@ async function getRetailProviderTx(tx: Prisma.TransactionClient, organizationId:
   return provider;
 }
 
+async function resolveMobileMoneyOperationAccountsTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+) {
+  const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
+  if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
+  const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
+  const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
+  const floatAccount = resolvedFloatAccount.account;
+  if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
+  const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, cashAccount.id, floatAccount.id);
+  return { provider, cashAccount, floatAccount, authority };
+}
+
+async function prepareMobileMoneyTransactionTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+) {
+  const accounts = await resolveMobileMoneyOperationAccountsTx(tx, organizationId, actorUserId, input);
+  const cashSession = await assertOpenCashSession(tx, organizationId, accounts.cashAccount.id, actorUserId);
+  const principal = decimal(input.principalAmount);
+  const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
+  const cashEffect = input.transactionType === "DEPOSIT" ? principal.plus(cashFee) : principal.negated().plus(cashFee);
+  const floatEffect = input.transactionType === "DEPOSIT" ? principal.negated() : principal;
+  return { ...accounts, cashSession, principal, cashEffect, floatEffect };
+}
+
+export async function assertConnectedMobileMoneyIntentTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+  replay: boolean,
+) {
+  await assertRetailOrganization(tx, organizationId);
+  const existing = await tx.enterpriseMobileMoneyTransaction.findFirst({
+    where: { organizationId, idempotencyKey: input.idempotencyKey },
+    select: { cashAccountId: true, floatAccountId: true },
+  });
+  if (replay) {
+    if (existing) await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, existing.cashAccountId, existing.floatAccountId);
+    else await resolveMobileMoneyOperationAccountsTx(tx, organizationId, actorUserId, input);
+    return;
+  }
+  if (existing) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  const { cashAccount, floatAccount, cashEffect, floatEffect, authority } = await prepareMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
+  assertSufficientAccountEffect(cashAccount, cashEffect);
+  assertSufficientAccountEffect(floatAccount, floatEffect, authority.hideFloatBalance);
+}
+
 async function createMobileMoneyTransactionTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -472,18 +537,8 @@ async function createMobileMoneyTransactionTx(
     await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, existing.cashAccountId, existing.floatAccountId);
     return { transaction: existing, idempotent: true };
   }
-  const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
-  if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
-  const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
-  const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
-  const floatAccount = resolvedFloatAccount.account;
-  if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
-  const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, cashAccount.id, floatAccount.id);
-  const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
-  const principal = decimal(input.principalAmount);
-  const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
-  const cashEffect = input.transactionType === "DEPOSIT" ? principal.plus(cashFee) : principal.negated().plus(cashFee);
-  const floatEffect = input.transactionType === "DEPOSIT" ? principal.negated() : principal;
+  const { provider, cashAccount, floatAccount, authority, cashSession, principal, cashEffect, floatEffect } =
+    await prepareMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
   const occurredAt = input.occurredAt || new Date();
   const number = retailReference("MM");
   const transaction = await tx.enterpriseMobileMoneyTransaction.create({ data: { organizationId, number, providerCode: provider.providerCode, transactionType: input.transactionType, customerPhone: input.customerPhone, currencyCode: input.currencyCode, principalAmount: principal, customerFeeAmount: decimal(input.customerFeeAmount || 0), providerCommissionAmount: decimal(input.providerCommissionAmount || 0), feeCollectionMode: input.feeCollectionMode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id, cashEffectAmount: cashEffect, floatEffectAmount: floatEffect, externalReference: input.externalReference || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });

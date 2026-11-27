@@ -6,6 +6,7 @@
 - Caisse. Compteurs toutes pages, flux exacts par devise et écarts des clôtures validées. Scopes général autorisé, filtres actifs et page, avec colonnes d’export concordantes.
 - Grand livre. Recherche des désignations et codes du catalogue pour les libellés stock historiques reconnus. Les totaux exacts de débit et de crédit suivent la recherche toutes pages et la devise fonctionnelle. Les écritures conservent leur libellé enregistré.
 - Télécom. Le registre et les exports utilisent les mêmes ventes, coûts opérateur et marges, groupés par devise et statut dans le périmètre boutique autorisé. Les lignes conservent la précision décimale et masquent les téléphones.
+- Mobile Money connecté. La caisse, le float, la session et les soldes sont vérifiés avant la transmission à l’opérateur. Une référence rejouée reste liée au même caissier et à la même opération.
 - Stock : la saisie des transferts, comptages et ajustements suit la précision de l’unité catalogue. Lecture exacte des valeurs historiques et contrôle de la précision du produit lors des conversions.
 - Trésorerie : sous-totaux de l’historique par devise, statut et sens, avec comparaison du filtré, du général et de la page. Filtres et synthèses des exports partagent les calculs serveur.
 - Dépenses : sous-totaux et exports par devise et statut, calculés dans le périmètre autorisé du registre.

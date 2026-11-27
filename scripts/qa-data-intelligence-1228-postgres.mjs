@@ -300,6 +300,113 @@ const { mobileMoneyWalletConfigurationScope, mobileMoneyScopedAccountWhere, asse
   } },
 })("@/lib/enterprise/retail/mobile-money-wallet-configuration-access");
 
+let connectedMobileMoneyTx;
+let connectedShopIds = [];
+let providerCalls = 0;
+const connectedMobileMoneyDb = {
+  $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(connectedMobileMoneyTx);
+  },
+  get enterpriseRetailProvider() { return connectedMobileMoneyTx.enterpriseRetailProvider; },
+  get enterpriseRetailProviderIntegration() { return connectedMobileMoneyTx.enterpriseRetailProviderIntegration; },
+  get enterpriseRetailProviderOperation() { return connectedMobileMoneyTx.enterpriseRetailProviderOperation; },
+};
+const connectedMobileMoneyLoad = workflowTestLoader({
+  "@/lib/prisma": { prisma: connectedMobileMoneyDb },
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (_org, _actor, capability, tx) => {
+    assert.equal(capability, "COLLECT_PAYMENT");
+    assert.equal(tx, connectedMobileMoneyTx);
+    return connectedShopIds;
+  } },
+  "@/lib/enterprise/retail/customer-payments": { transitionRetailProviderOperation: (organizationId, id, result) =>
+    connectedMobileMoneyTx.enterpriseRetailProviderOperation.update({
+      where: { organizationId_id: { organizationId, id } },
+      data: { status: result.status, externalReference: result.externalReference },
+    }) },
+  "@/lib/enterprise/retail/payment-provider-adapter": { getRetailPaymentProviderAdapter: () => ({
+    async initiate(_context, intent) {
+      providerCalls++;
+      assert.equal(intent.currencyCode, "CDF");
+      assert.equal(intent.amount, "10");
+      return { status: "PENDING_PROVIDER", externalReference: "QA-CONNECTED-MM" };
+    },
+  }) },
+  "@/lib/enterprise/retail/mobile-money-accounting": {},
+  "@/lib/enterprise/retail/telco-accounting": {},
+  "@/lib/enterprise/accounting/cash-handover-service": {},
+  "@/lib/enterprise/accounting/mobile-money-ledger-provisioning": {},
+  "@/lib/enterprise/accounting/accounting-approval-service": {},
+  "@/lib/enterprise/accounting/posting-service": {},
+  "@/lib/enterprise/accounting/helpers": {},
+  "@/lib/enterprise/crm-sales/helpers": {},
+  "@/lib/enterprise/inventory/service": {},
+  "@/lib/enterprise/retail/accounting": {},
+  "@/lib/enterprise/retail/inventory-policy": {},
+  "@/lib/enterprise/relationship-benefits/retail-adapter": {},
+  "@/lib/enterprise/retail/retail-loyalty": {},
+  "@/lib/enterprise/retail/retail-cashback": {},
+  "@/lib/enterprise/retail/relationship-store-credit": {},
+  "@/lib/enterprise/retail/telco-multicurrency-service": {},
+});
+const { createConnectedMobileMoneyOperation } = connectedMobileMoneyLoad("@/lib/enterprise/retail/operator-orchestration");
+const { mobileMoneyCreateSchema } = connectedMobileMoneyLoad("@/lib/enterprise/retail/schemas");
+
+async function verifyConnectedMobileMoney(tenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    connectedMobileMoneyTx = tx;
+    const site = tenant + "-connected-shop";
+    connectedShopIds = [site];
+    await tx.organization.create({ data: { id: tenant, name: "QA connected Mobile Money", status: "ACTIVE", sectorCode: "COMMERCE_RETAIL" } });
+    const chart = await tx.enterpriseChartOfAccounts.create({ data: { organizationId: tenant, code: "CONNECTED", nameFr: "Test", nameEn: "Test", createdByUserId: actor } });
+    const account = async (code, accountType, siteId, operationalBalance) => {
+      const ledger = await tx.enterpriseLedgerAccount.create({ data: { organizationId: tenant, chartId: chart.id, code, nameFr: code, nameEn: code, accountType: "ASSET" } });
+      return tx.enterpriseFinancialAccount.create({
+        data: { organizationId: tenant, ledgerAccountId: ledger.id, code, name: code, accountType, currencyCode: "CDF", siteId, operationalBalance },
+      });
+    };
+    const till = await account("TILL", "CASH", site, "5");
+    const otherTill = await account("OTHER-TILL", "CASH", "other-shop", "1000");
+    const shared = await account("FLOAT", "MOBILE_MONEY", null, "9.999999");
+    const provider = await tx.enterpriseRetailProvider.create({
+      data: { organizationId: tenant, providerCode: "QA-CONNECTED", label: "QA connected", providerType: "MOBILE_MONEY", mobileMoneyFloatAccountId: shared.id },
+    });
+    await tx.enterpriseRetailProviderIntegration.create({
+      data: { organizationId: tenant, providerId: provider.id, integrationMode: "CONNECTED", connectionStatus: "ACTIVE", adapterCode: "QA-STUB", createdByUserId: actor },
+    });
+    const input = mobileMoneyCreateSchema.parse({
+      providerCode: provider.providerCode, transactionType: "DEPOSIT", currencyCode: "CDF", principalAmount: 10,
+      customerPhone: "+243810123456", cashAccountId: till.id, idempotencyKey: "qa-connected-preflight",
+    });
+    const submit = (override = {}, caller = actor) => createConnectedMobileMoneyOperation(tenant, caller, { ...input, ...override });
+    await assert.rejects(submit({ cashAccountId: otherTill.id }), { code: "RETAIL_SITE_ACCESS_DENIED" });
+    await assert.rejects(submit(), { code: "RETAIL_OPEN_CASH_SESSION_REQUIRED" });
+    const session = await tx.enterpriseCashSession.create({
+      data: { organizationId: tenant, number: "CONNECTED-TILL", financialAccountId: till.id, cashierUserId: actor, siteId: site, openingAmount: "5" },
+    });
+    await assert.rejects(submit({ transactionType: "WITHDRAWAL" }), { code: "RETAIL_INSUFFICIENT_BALANCE" });
+    await assert.rejects(submit(), { code: "RETAIL_INSUFFICIENT_BALANCE", details: { requiredAmount: "10" } });
+    assert.equal(providerCalls, 0);
+    assert.equal(await tx.enterpriseRetailProviderOperation.count({ where: { organizationId: tenant } }), 0);
+    await tx.enterpriseFinancialAccount.update({ where: { id: shared.id }, data: { operationalBalance: "10" } });
+    const sent = await submit();
+    assert.equal(sent.operation.status, "PENDING_PROVIDER");
+    assert.equal(sent.idempotent, false);
+    assert.equal(await tx.enterpriseRetailProviderOperation.count({ where: { organizationId: tenant } }), 1);
+    await tx.enterpriseCashSession.update({ where: { id: session.id }, data: { status: "CLOSED" } });
+    assert.equal((await submit()).idempotent, true, "A replay checks scope without requiring a fresh open session");
+    await assert.rejects(submit({ principalAmount: 11 }), { code: "RETAIL_IDEMPOTENCY_CONFLICT" });
+    await assert.rejects(submit({}, "other-operator"), { code: "RETAIL_IDEMPOTENCY_CONFLICT" });
+    connectedShopIds = [];
+    await assert.rejects(submit(), { code: "RETAIL_SITE_ACCESS_DENIED" });
+    assert.equal(providerCalls, 1);
+    assert.equal((await tx.enterpriseFinancialAccount.findUniqueOrThrow({ where: { id: shared.id } })).operationalBalance.toFixed(), "10");
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  assert.equal(await db.enterpriseRetailProviderOperation.count({ where: { organizationId: tenant } }), 0);
+  console.log("PASS #1228 PostgreSQL connected Mobile Money: till/float preflight, no provider calls on refusal and permission-checked replay");
+}
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -935,6 +1042,7 @@ try {
   await verifyConversionHistory(tenant, otherTenant, actor);
   await verifyProjectAnalytics(tenant, otherTenant, actor);
   await verifyCashAnalytics(tenant, otherTenant, actor);
+  await verifyConnectedMobileMoney(tenant, actor);
   await verifyLedgerSearch(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
