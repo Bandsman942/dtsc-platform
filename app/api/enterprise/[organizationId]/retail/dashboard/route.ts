@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { readMobileMoneyFxHistory } from "@/lib/enterprise/retail/mobile-money-fx-history";
 import { readMobileMoneyDashboardOperations } from "@/lib/enterprise/retail/mobile-money-dashboard-read";
+import { mobileMoneyWalletConfigurationScope, mobileMoneyScopedAccountWhere } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { writeApiLog } from "@/lib/audit";
 import { getCommercialRetailDashboardRead } from "@/lib/enterprise/retail/commercial-dashboard";
 import { RETAIL_MODULE_CODES, type RetailModuleCode } from "@/lib/enterprise/retail/constants";
@@ -67,15 +68,23 @@ export async function GET(req: Request, { params }: Params) {
   });
 
   let mobileMoneyHistory: MobileMoneyHistoryItem[] = mobileMoneyRecent;
+  let mobileMoneyCommon = common;
   if (moduleCode === "MOBILE_MONEY_AGENCY") {
-    const { operations, history } = await prisma.$transaction(async tx => {
+    const { operations, history, scope, accounts } = await prisma.$transaction(async tx => {
       const range = { organizationId, userId: auth.session.userId, from: new Date(dashboard.range.from), to: new Date(dashboard.range.to) };
-      const [operations, history] = await Promise.all([
+      const scope = await mobileMoneyWalletConfigurationScope(tx, organizationId, auth.session.userId);
+      const [operations, history, accounts] = await Promise.all([
         readMobileMoneyDashboardOperations(tx, range),
         readMobileMoneyFxHistory(tx, { ...range, page: 1, pageSize: 100 }),
+        tx.enterpriseFinancialAccount.findMany({ where: mobileMoneyScopedAccountWhere(organizationId, scope), orderBy: [{ accountType: "asc" }, { name: "asc" }],
+          select: { id: true, code: true, name: true, accountType: true, currencyCode: true, operationalBalance: true, siteId: true } }),
       ]);
-      return { operations, history };
+      return { operations, history, scope, accounts };
     }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+    const allowedCashAccounts = new Set(accounts.filter(account => account.accountType === "CASH").map(account => account.id));
+    const cashSessions = dashboard.cashSessions.filter(session => allowedCashAccounts.has(session.financialAccount.id));
+    mobileMoneyCommon = { ...common, accounts, cashSessions, cashSession: cashSessions.find(session => session.status === "OPEN") || cashSessions[0] || null,
+      access: { ...common.access, canWrite: common.access.canWrite && (scope.collectionSites === null || scope.collectionSites.length > 0) } };
     mobileMoneyRecent = operations.items;
     mobileMoneyMetrics = operations.metrics;
     const fxHistory: MobileMoneyHistoryItem[] = history.items.map(transfer => {
@@ -113,7 +122,7 @@ export async function GET(req: Request, { params }: Params) {
   const scoped = moduleCode === "RETAIL_POS"
     ? { ...common, warehouses: dashboard.warehouses, catalogItems: dashboard.catalogItems, inventoryItems: dashboard.inventoryItems, metricsByCurrency: { sales: dashboard.metricsByCurrency.sales }, recent: { sales: dashboard.recent.sales } }
     : moduleCode === "MOBILE_MONEY_AGENCY"
-      ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "MOBILE_MONEY"), metricsByCurrency: { mobileMoney: mobileMoneyMetrics }, recent: { mobileMoney: mobileMoneyHistory } }
+      ? { ...mobileMoneyCommon, providers: dashboard.providers.filter(item => item.providerType === "MOBILE_MONEY" || item.providerType === "BOTH").map(item => ({ id: item.id, providerCode: item.providerCode, label: item.label, providerType: item.providerType, isActive: item.isActive, mobileMoneyFloatAccountId: mobileMoneyCommon.accounts.some(account => account.id === item.mobileMoneyFloatAccountId) ? item.mobileMoneyFloatAccountId : null, telcoFloatAccountId: null })), metricsByCurrency: { mobileMoney: mobileMoneyMetrics }, recent: { mobileMoney: mobileMoneyHistory } }
       : moduleCode === "TELCO_TOPUPS"
         ? { ...common, providers: dashboard.providers.filter((item) => item.providerType === "TELCO" || item.providerType === "BOTH"), telcoConfiguration: dashboard.telcoConfiguration, catalogItems: dashboard.catalogItems, metricsByCurrency: { telco: dashboard.metricsByCurrency.telco }, recent: { topups: topupRecent } }
         : { ...common, metricsByCurrency: {}, recent: { closes: dashboard.recent.closes } };

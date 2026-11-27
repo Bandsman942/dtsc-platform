@@ -75,6 +75,7 @@ type MobileMoneyConfiguration = {
   minimumCurrencyCount: number;
   availableCurrencies: string[];
   financialAccounts: CurrencyAccount[];
+  canManageMappings?: boolean;
   providers: ProviderConfiguration[];
 };
 
@@ -861,7 +862,7 @@ function MobileMoneyFxPanel({
                 <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.sourceAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAmount), preview.sourceCurrencyCode, locale)}</p></div>
                 <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.rate}</p><p className="font-black text-dtsc-ink">1 {preview.sourceCurrencyCode} = {Number(preview.rate).toLocaleString(translateRetailWorkspace(locale, "mobileMoneyEnUS"), { maximumFractionDigits: 6 })} {preview.targetCurrencyCode}</p></div>
                 <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.targetAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.targetAmount), preview.targetCurrencyCode, locale)}</p></div>
-                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.available}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAvailableBalance), preview.sourceCurrencyCode, locale)}</p></div>
+                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.available}</p><p className="font-black text-dtsc-ink">{formatAnalyticsAmount({ amount: String(preview.sourceAvailableBalance), currencyCode: preview.sourceCurrencyCode }, locale)}</p></div>
               </div>
               <p className="mt-2 text-xs font-semibold text-dtsc-muted">{formatEnterpriseDate(preview.rateDate, locale)} · {preview.rateSource}</p>
               {!preview.sufficientBalance ? <p className="mt-3 font-bold text-rose-700 dark:text-rose-200">{copy.fxInsufficient}</p> : null}
@@ -922,10 +923,12 @@ function MobileMoneyConfigurationPanel({
   if (configurationBusy && !configuration) return <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-muted">{copy.processing}</div>;
   if (configurationError && !configuration) return <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-bold text-rose-700 dark:text-rose-200">{configurationError}</div>;
   if (!configuration) return null;
+  const canManageMappings = dashboard.access.canManage && configuration.canManageMappings === true;
 
   return (
     <div id="mobile-money-wallet-configuration" className="grid min-w-0 gap-5">
       <ModuleSection title={copy.configTitle} description={copy.configDescription}>
+        {configuration.canManageMappings === false ? <p className="mb-3 rounded-xl border border-dtsc-border p-3 text-sm text-dtsc-muted">{translateRetailWorkspace(locale, "mobileMoneyWalletScopedReadOnly")}</p> : null}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
           <p className="text-sm font-semibold text-dtsc-muted">{configuration.requiredCurrencies.length ? `${copy.requiredCountry}: ${configuration.requiredCurrencies.join(" + ")}` : copy.minimumTwo}</p>
           <Button size="sm" variant="outline" type="button" disabled={configurationBusy} onClick={() => void reload()}><RefreshCw className="h-4 w-4" />{copy.refresh}</Button>
@@ -953,10 +956,10 @@ function MobileMoneyConfigurationPanel({
                   {fixedCurrencies.map((currencyCode) => {
                     const mapping = provider.accounts.find((item) => item.currencyCode === currencyCode);
                     const accounts = configuration.financialAccounts.filter((account) => account.currencyCode === currencyCode);
-                    return <WalletMappingRow key={currencyCode} provider={provider} currencyCode={currencyCode} mapping={mapping || null} accounts={accounts} canManage={dashboard.access.canManage} busy={Boolean(busyAction)} locale={locale} onSave={saveMapping} />;
+                    return <WalletMappingRow key={currencyCode} provider={provider} currencyCode={currencyCode} mapping={mapping || null} accounts={accounts} canManage={canManageMappings} busy={Boolean(busyAction)} locale={locale} onSave={saveMapping} />;
                   })}
                   {!fixedCurrencies.length ? <p className="text-sm font-semibold text-dtsc-muted">{copy.minimumTwo}</p> : null}
-                  {dashboard.access.canManage && addable.length ? (
+                  {canManageMappings && addable.length ? (
                     <div className="rounded-xl border border-dashed border-dtsc-border p-3">
                       <p className="mb-2 text-xs font-black uppercase tracking-wide text-dtsc-muted">{copy.addCurrency}</p>
                       <div className="grid gap-3 sm:grid-cols-[0.45fr_minmax(0,1fr)_auto] sm:items-end">
@@ -1022,7 +1025,7 @@ function WalletMappingRow({
           <StatusBadge tone={mapping ? "success" : "warning"}>{currencyCode}</StatusBadge>
           <div>
             <p className="text-sm font-black text-dtsc-ink">{mapping?.financialAccount.name || copy.notConfigured}</p>
-            {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {moneyValue(Number(mapping.financialAccount.operationalBalance), currencyCode, locale)}</p> : null}
+            {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {formatAnalyticsAmount({ amount: String(mapping.financialAccount.operationalBalance), currencyCode }, locale)}</p> : null}
           </div>
         </div>
         <StatusBadge tone={mapping ? "success" : "warning"}>{mapping ? "OK" : copy.incomplete}</StatusBadge>

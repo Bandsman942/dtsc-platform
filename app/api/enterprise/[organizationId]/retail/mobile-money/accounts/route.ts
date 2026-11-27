@@ -14,7 +14,7 @@ export async function GET(req: Request, { params }: Params) {
   const auth = await authorizeRetailRequest(req, organizationId, "MOBILE_MONEY_AGENCY", "read");
   if (!auth.ok) return auth.response;
   try {
-    const configuration = await getMobileMoneyProviderAccountConfiguration(organizationId);
+    const configuration = await getMobileMoneyProviderAccountConfiguration(organizationId, auth.session.userId);
     const integrations = await prisma.enterpriseRetailProviderIntegration.findMany({
       where: { organizationId, archivedAt: null },
       select: { providerId: true, integrationMode: true },
@@ -28,7 +28,7 @@ export async function GET(req: Request, { params }: Params) {
       })),
     };
     await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "mobile-money-provider-accounts" } });
-    return NextResponse.json(enrichedConfiguration);
+    return NextResponse.json(enrichedConfiguration, { headers: { "Cache-Control": "private, no-store" } });
   } catch (error) {
     return retailErrorResponse(error, "MOBILE_MONEY_PROVIDER_ACCOUNTS_LOAD_FAILED");
   }

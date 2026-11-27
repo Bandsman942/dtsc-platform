@@ -5,6 +5,7 @@ import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
 import { assertMobileMoneyFxWalletAccess } from "@/lib/enterprise/retail/mobile-money-fx-access";
+import { assertMobileMoneyGlobalMappingAccess, mobileMoneyWalletConfigurationScope } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { requiredRetailOperatorCurrencies } from "@/lib/enterprise/retail/operator-currency-policy";
 import { prisma } from "@/lib/prisma";
 
@@ -84,23 +85,23 @@ export async function resolveMobileMoneyFloatAccountTx(
   });
 }
 
-export async function getMobileMoneyProviderAccountConfiguration(organizationId: string) {
+async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.TransactionClient, organizationId: string, readSites: string[] | null, canManageMappings: boolean) {
   const [organization, providers, mappings, financialAccounts, financeConfiguration] = await Promise.all([
-    prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { country: true } }),
-    prisma.enterpriseRetailProvider.findMany({
+    database.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { country: true } }),
+    database.enterpriseRetailProvider.findMany({
       where: { organizationId, providerType: { in: ["MOBILE_MONEY", "BOTH"] }, isActive: true },
       orderBy: { label: "asc" },
     }),
-    prisma.enterpriseRetailProviderAccount.findMany({
+    database.enterpriseRetailProviderAccount.findMany({
       where: { organizationId, accountUse: MOBILE_MONEY_FLOAT, isActive: true },
       orderBy: [{ providerCode: "asc" }, { currencyCode: "asc" }],
     }),
-    prisma.enterpriseFinancialAccount.findMany({
-      where: { organizationId, accountType: "MOBILE_MONEY", status: "ACTIVE", archivedAt: null },
+    database.enterpriseFinancialAccount.findMany({
+      where: { organizationId, accountType: "MOBILE_MONEY", status: "ACTIVE", archivedAt: null, ...(readSites === null ? {} : { siteId: { in: readSites } }) },
       orderBy: [{ currencyCode: "asc" }, { name: "asc" }],
       select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true, ledgerAccountId: true },
     }),
-    prisma.enterpriseFinanceConfiguration.findUnique({
+    database.enterpriseFinanceConfiguration.findUnique({
       where: { organizationId },
       select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
     }),
@@ -142,8 +143,18 @@ export async function getMobileMoneyProviderAccountConfiguration(organizationId:
     minimumCurrencyCount: 2,
     availableCurrencies,
     financialAccounts,
+    canManageMappings,
     providers: mappedProviders,
   };
+}
+
+/** Internal callers use an organization projection; API callers must supply an actor. */
+export async function getMobileMoneyProviderAccountConfiguration(organizationId: string, userId?: string) {
+  if (userId === undefined) return loadMobileMoneyProviderAccountConfiguration(prisma, organizationId, null, true);
+  return prisma.$transaction(async tx => {
+    const scope = await mobileMoneyWalletConfigurationScope(tx, organizationId, userId);
+    return loadMobileMoneyProviderAccountConfiguration(tx, organizationId, scope.readSites, scope.canManageMappings);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
 export async function upsertMobileMoneyProviderAccount(
@@ -153,6 +164,7 @@ export async function upsertMobileMoneyProviderAccount(
 ) {
   const currencyCode = input.currencyCode.trim().toUpperCase();
   return prisma.$transaction(async (tx) => {
+    await assertMobileMoneyGlobalMappingAccess(tx, organizationId, actorUserId);
     const provider = await assertProviderTx(tx, organizationId, input.providerCode);
     const account = await assertMobileMoneyAccountTx(tx, organizationId, input.financialAccountId, currencyCode);
     const mapping = await tx.enterpriseRetailProviderAccount.upsert({

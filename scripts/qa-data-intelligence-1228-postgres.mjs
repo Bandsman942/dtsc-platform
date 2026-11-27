@@ -291,6 +291,15 @@ const { assertMobileMoneyFxWalletAccess, mobileMoneyFxWalletScope } = workflowTe
   } },
 })("@/lib/enterprise/retail/mobile-money-fx-access");
 
+const { mobileMoneyWalletConfigurationScope, mobileMoneyScopedAccountWhere, assertMobileMoneyGlobalMappingAccess } = workflowTestLoader({
+  "@/lib/enterprise/retail/site-access": { retailFinanceReadSiteScope: async (organizationId, actor, capability, tx) => {
+    assert.equal(organizationId, cashFixture.organizationId);
+    assert.equal(actor, cashFixture.actor);
+    assert.equal(tx, cashFixture.reader);
+    return capability === "VIEW_SALES" ? cashFixture.fxReadSites : cashFixture.fxCollectSites;
+  } },
+})("@/lib/enterprise/retail/mobile-money-wallet-configuration-access");
+
 async function verifyCashAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const siteA = `${tenant}-cash-shop-a`;
@@ -499,6 +508,12 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     const fxShared = await wallet("QA-FX-SHARED", "USD", null);
     cashFixture.fxReadSites = [siteA];
     cashFixture.fxCollectSites = [];
+    const readWalletScope = () => mobileMoneyWalletConfigurationScope(tx, tenant, actor);
+    const mappingAccess = () => assertMobileMoneyGlobalMappingAccess(tx, tenant, actor);
+    const visibleAccountIds = async () => (await tx.enterpriseFinancialAccount.findMany({ where: mobileMoneyScopedAccountWhere(tenant, await readWalletScope()), select: { id: true } })).map(row => row.id).sort();
+    assert.deepEqual(await visibleAccountIds(), [fxCdf.id, fxUsd.id].sort());
+    assert.equal((await readWalletScope()).canManageMappings, false);
+    await assert.rejects(mappingAccess(), error => error.code === "RETAIL_SITE_ACCESS_DENIED" && error.status === 403);
     const assertWallets = (capability, source, target) => assertMobileMoneyFxWalletAccess(tx, tenant, actor, capability, source, target);
     const denied = error => error.code === "RETAIL_SITE_ACCESS_DENIED" && error.status === 403;
     await assertWallets("VIEW_SALES", fxCdf.id, fxUsd.id);
@@ -507,9 +522,17 @@ async function verifyCashAnalytics(tenant, otherTenant, actor) {
     await assert.rejects(assertWallets("COLLECT_PAYMENT", fxCdf.id, fxUsd.id), denied);
     assert.deepEqual(await mobileMoneyFxWalletScope(tx, tenant, actor, "COLLECT_PAYMENT"), []);
     cashFixture.fxCollectSites = [siteA];
+    assert.deepEqual(await visibleAccountIds(), [cdf.id, usd.id, fxCdf.id, fxUsd.id].sort());
+    await assert.rejects(mappingAccess(), error => error.code === "RETAIL_SITE_ACCESS_DENIED" && error.status === 403);
     await assertWallets("COLLECT_PAYMENT", fxCdf.id, fxUsd.id);
     await assert.rejects(assertWallets("COLLECT_PAYMENT", fxOther.id, fxUsd.id), denied);
     cashFixture.fxCollectSites = null;
+    cashFixture.fxReadSites = null;
+    assert.equal((await readWalletScope()).canManageMappings, true);
+    await mappingAccess();
+    const globalAccounts = await visibleAccountIds();
+    assert.ok(globalAccounts.includes(fxShared.id) && globalAccounts.includes(fxOther.id));
+    assert.ok(!globalAccounts.includes(foreign.id));
     await assertWallets("COLLECT_PAYMENT", fxShared.id, fxOther.id);
     await assert.rejects(assertWallets("COLLECT_PAYMENT", fxCdf.id, foreign.id), denied);
     delete cashFixture.fxReadSites;

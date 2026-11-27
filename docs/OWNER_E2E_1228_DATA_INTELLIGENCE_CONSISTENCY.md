@@ -56,3 +56,7 @@ Pour une période contenant des dépôts, retraits, contrepassations et opérati
 ### Mobile Money FX — accès directs
 
 Avec des wallets CDF/USD dans deux boutiques et un wallet partagé sans affectation, essayer prévisualisation, création, rejeu de la même clé, reprise comptable et contrepassation par API directe. Un lecteur sans COLLECT_PAYMENT ne doit pas obtenir de mutation, un gestionnaire limité à une boutique ne doit pas agir sur un wallet hors périmètre, même si le transfert existe déjà. Les droits de module restent obligatoires et l'administrateur global ne peut accéder au tenant voisin. Vérifier l'absence de mouvement et de changement de révision après refus. La recette doit aussi couvrir la révocation d'une affectation et le diagnostic de reprise ; aucun nouveau test navigateur exécuté dans cette tranche.
+
+### Mobile Money — soldes et configuration par boutique
+
+Comparer la configuration wallet et le tableau de bord entre un gestionnaire global et un collaborateur limité à une boutique. Les soldes des wallets et caisses d'une autre boutique et les wallets sans affectation ne doivent pas apparaître ; le bouton de mapping est absent pour le gestionnaire limité et son POST direct doit être refusé. Vérifier les six décimales, la révocation d'accès et la non-divulgation interentreprises. La configuration globale reste gérable par les personnes autorisées ; un mapping unique ne devient pas un mapping par boutique. Tester séparément les opérations de caisse ordinaires utilisant un float mutualisé.

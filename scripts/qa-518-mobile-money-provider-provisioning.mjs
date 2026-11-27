@@ -81,7 +81,11 @@ for (const marker of [
   check(accountService.includes(marker), `Mobile Money account service contract missing ${marker}`);
 }
 
+const walletAccess = read("lib/enterprise/retail/mobile-money-wallet-configuration-access.ts");
+check(accountsRoute.includes("getMobileMoneyProviderAccountConfiguration(organizationId, auth.session.userId)"), "Wallet API must use actor-specific read scope");
+check(accountService.includes("assertMobileMoneyGlobalMappingAccess(tx, organizationId, actorUserId)") && walletAccess.includes("if (sites !== null)"), "Tenant-wide wallet mappings must reject scoped managers");
 const workspace = read("components/enterprise/professional/mobile-money-agency-workspace.tsx");
+check(workspace.includes("configuration.canManageMappings === true"), "Wallet UI must honor the mapping-specific permission");
 for (const marker of [
   "configuration.providers.map",
   "WalletMappingRow",
