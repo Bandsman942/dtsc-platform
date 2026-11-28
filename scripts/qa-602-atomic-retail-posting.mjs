@@ -46,7 +46,7 @@ forbidText("posting", postingTx, "prisma.$transaction", "postBusinessEventTx ne 
 requireText("provisioning", provisioning, "export async function ensureMobileMoneyTransactionLedgerMappingTx(", "le mapping wallet Mobile Money doit être réutilisable dans la transaction métier");
 requireText("provisioning", provisioning, "export async function ensureMobileMoneyFxLedgerMappingsTx(", "les mappings wallet FX doivent être réutilisables dans la transaction métier");
 requireText("provisioning", provisioning, "(tx) => ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, transactionId)", "le wrapper Mobile Money historique doit déléguer à la primitive Tx");
-requireText("provisioning", provisioning, "(tx) => ensureMobileMoneyFxLedgerMappingsTx(tx, organizationId, actorUserId, transferId)", "le wrapper FX historique doit déléguer à la primitive Tx");
+forbidText("provisioning", provisioning, "export async function ensureMobileMoneyFxLedgerMappings(", "la reprise FX ne doit plus amorcer le mapping dans une transaction autonome");
 
 requireText("retail service", retailService, "async function createMobileMoneyTransactionTx(", "le cœur Mobile Money doit accepter un TransactionClient");
 requireText("retail service", retailService, "export async function createMobileMoneyTransactionWithPosting(", "le wrapper atomique Mobile Money manque");
@@ -55,7 +55,7 @@ requireText("retail service", retailService, 'postingEvent: "RETAIL_MOBILE_MONEY
 requireText("retail service", retailService, "async function createTelcoTopupTx(", "le cœur Telco doit accepter un TransactionClient");
 requireText("retail service", retailService, "export async function createTelcoTopupWithPosting(", "le wrapper atomique Telco manque");
 requireText("retail service", retailService, 'postingEvent: "RETAIL_TELCO_TOPUP_POSTED"', "le posting Telco canonique manque");
-requireText("retail service", retailService, "export async function createMobileMoneyTransaction(", "le wrapper legacy Mobile Money doit rester pour les parcours provider/historiques");
+requireText("retail service", retailService, "export async function createMobileMoneyTransactionWithPostingTx(", "le cœur atomique Mobile Money doit être utilisable par les parcours fournisseur");
 requireText("retail service", retailService, "export async function createTelcoTopup(", "le wrapper legacy Telco doit rester pour les parcours provider/historiques");
 
 requireText("FX service", fxService, "async function createMobileMoneyFxTransferTx(", "le cœur FX doit accepter un TransactionClient");
@@ -79,8 +79,8 @@ forbidText("Telco route", telcoRoute, "finalizeTelcoTopupAccounting", "la route 
 forbidText("Telco route", telcoRoute, "ENTERPRISE_TELCO_TOPUP_ACCOUNTING_PENDING", "une nouvelle recharge SUCCESS ne doit plus rester comptablement PENDING");
 forbidText("Telco route", telcoRoute, 'retailPendingOutcome("RETAIL_ACCOUNTING_PENDING"', "un échec comptable Telco atomique doit rollback");
 
-requireText("provider compatibility", operatorOrchestration, "createMobileMoneyTransaction", "le parcours provider Mobile Money historique doit rester disponible dans ce sous-lot");
-requireText("provider compatibility", operatorOrchestration, "finalizeMobileMoneyAccounting", "le cutover provider Mobile Money est explicitement hors scope #602");
+requireText("provider compatibility", operatorOrchestration, "await createMobileMoneyTransactionWithPostingTx(tx", "la confirmation Mobile Money doit utiliser les écritures atomiques dans la transaction qui lie la demande fournisseur");
+requireText("provider compatibility", operatorOrchestration, "await finalizeMobileMoneyAccounting(organizationId", "le parcours de reprise doit préserver la finalisation des confirmations déjà liées");
 requireText("provider compatibility", operatorOrchestration, "createTelcoTopup", "le parcours provider Telco historique doit rester disponible dans ce sous-lot");
 requireText("provider compatibility", operatorOrchestration, "finalizeTelcoTopupAccounting", "le cutover provider Telco est explicitement hors scope #602");
 

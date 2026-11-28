@@ -10,6 +10,19 @@ type ProfessionalErpSupplementKey =
   | "common.page"
   | "common.previous"
   | "common.next"
+  | "hr.schedule.weekly"
+  | "hr.schedule.date"
+  | "hr.source.manual"
+  | "hr.source.import"
+  | "hr.source.system"
+  | "hr.source.label"
+  | "hr.filter.status"
+  | "hr.filter.search"
+  | "hr.filter.from"
+  | "hr.filter.to"
+  | "hr.filter.archive"
+  | "hr.filter.archived"
+  | "hr.filter.current"
   | "common.submitting"
   | "common.saving"
   | "inventory.rejectionReasonRequired"
@@ -78,6 +91,19 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "common.page": "Page {{current}} sur {{total}}",
     "common.previous": "Précédent",
     "common.next": "Suivant",
+    "hr.schedule.weekly": "Hebdomadaire",
+    "hr.schedule.date": "Date précise",
+    "hr.source.manual": "Saisie manuelle",
+    "hr.source.import": "Import",
+    "hr.source.system": "Système",
+    "hr.source.label": "Origine",
+    "hr.filter.status": "Statut",
+    "hr.filter.search": "Recherche",
+    "hr.filter.from": "Du",
+    "hr.filter.to": "Au",
+    "hr.filter.archive": "Registre",
+    "hr.filter.archived": "Archives",
+    "hr.filter.current": "Contrats courants",
     "common.submitting": "Envoi…",
     "common.saving": "Enregistrement…",
     "inventory.rejectionReasonRequired": "Un motif est obligatoire pour rejeter l’opération.",
@@ -120,6 +146,19 @@ const professionalSupplements: Record<ProfessionalErpLocale, Record<Professional
     "common.page": "Page {{current}} of {{total}}",
     "common.previous": "Previous",
     "common.next": "Next",
+    "hr.schedule.weekly": "Weekly",
+    "hr.schedule.date": "Specific date",
+    "hr.source.manual": "Manual entry",
+    "hr.source.import": "Import",
+    "hr.source.system": "System",
+    "hr.source.label": "Source",
+    "hr.filter.status": "Status",
+    "hr.filter.search": "Search",
+    "hr.filter.from": "From",
+    "hr.filter.to": "Through",
+    "hr.filter.archive": "Register",
+    "hr.filter.archived": "Archived records",
+    "hr.filter.current": "Current contracts",
     "common.submitting": "Submitting…",
     "common.saving": "Saving…",
     "inventory.rejectionReasonRequired": "A rejection reason is required.",
@@ -262,6 +301,30 @@ export function professionalErpEnumLabel(
   const key = `${group}.${value}` as BaseProfessionalErpKey;
   const localized = translateProfessionalErp(locale, key);
   return localized || professionalErpT(locale, "common.valueToReview");
+}
+
+export function canonicalContractType(value: string | null | undefined): string {
+  if (!value) return "EMPLOYMENT";
+  switch (value) {
+    case "EMPLOYEE": return "EMPLOYMENT";
+    case "CONTRACTOR": return "CONSULTING";
+    case "INTERN": return "INTERNSHIP";
+    case "TEMPORARY": return "FIXED_TERM";
+    default: return value;
+  }
+}
+
+export function professionalHrCodeLabel(locale: ProfessionalErpLocale, group: "scheduleType" | "attendanceSource", value: string) {
+  if (!value) return "";
+  if (group === "scheduleType") {
+    if (value === "WEEKLY") return professionalErpT(locale, "hr.schedule.weekly");
+    if (value === "DATE") return professionalErpT(locale, "hr.schedule.date");
+  } else {
+    if (value === "MANUAL") return professionalErpT(locale, "hr.source.manual");
+    if (value === "IMPORT") return professionalErpT(locale, "hr.source.import");
+    if (value === "SYSTEM") return professionalErpT(locale, "hr.source.system");
+  }
+  return professionalErpT(locale, "common.valueToReview");
 }
 
 export function professionalErpMoney(value: string | number | null | undefined, currency: string | null | undefined, locale: ProfessionalErpLocale) {

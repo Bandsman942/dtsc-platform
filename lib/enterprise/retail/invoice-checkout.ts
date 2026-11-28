@@ -15,8 +15,10 @@ import { planReservationLotAllocations, readInvoiceLotAllocations, reservationEx
 import { assertRetailLotPolicyTx, businessDateKey, lotIsExpired } from "@/lib/enterprise/retail/inventory-policy";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
+import { retailSaleQuantitySchema } from "@/lib/enterprise/retail/schemas";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 import { retailInvoiceFooterSnapshot, retailInvoiceHeaderSnapshot } from "@/lib/enterprise/retail/operating-settings";
@@ -30,7 +32,7 @@ export const retailInvoicePrepareSchema = z.object({
   lines: z.array(z.object({
     catalogItemId: z.string().trim().min(1).max(191),
     stockLotId: z.string().trim().min(1).max(191).optional().nullable(),
-    quantity: z.number().positive().max(1_000_000).refine((value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001),
+    quantity: retailSaleQuantitySchema,
   }).strict()).min(1).max(100),
 }).strict();
 
@@ -109,7 +111,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       tx.organization.findFirst({ where: { id: organizationId, organizationType: "CLIENT", status: "ACTIVE", deletedAt: null, sectorCode: RETAIL_SECTOR_CODE }, select: { id: true, name: true, phone: true, email: true, address: true, timezone: true, settingsJson: true } }),
       tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } }),
       tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, siteId: input.siteId, site: { status: "ACTIVE", archivedAt: null }, status: "ACTIVE", archivedAt: null }, select: { id: true, site: { select: { name: true, addressLine1: true, addressLine2: true, city: true, countryCode: true } } } }),
-      tx.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, currency: true, trackInventory: true } }),
+      tx.enterpriseCatalogItem.findMany({ where: { organizationId, id: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, name: true, currency: true, trackInventory: true, unitOfMeasure: { select: { decimalScale: true } } } }),
       tx.enterpriseInventoryItem.findMany({ where: { organizationId, catalogItemId: { in: [...uniqueItems] }, status: "ACTIVE", archivedAt: null }, select: { id: true, catalogItemId: true, lotTracking: true, expiryTracking: true } }),
     ]);
     if (!organization || !warehouse) throw new EnterpriseRetailError("RETAIL_REFERENCE_INVALID", 409);
@@ -132,6 +134,7 @@ export async function prepareRetailInvoice(organizationId: string, actorUserId: 
       const decision = decisionByCatalog.get(line.catalogItemId);
       const invoiceFx = decision?.context.invoiceFx as { sourceCurrencyCode?: string } | undefined;
       if (!item || !decision || (item.currency && item.currency !== input.currencyCode && invoiceFx?.sourceCurrencyCode !== item.currency)) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409);
+      requireInventoryQuantity(line.quantity, item.unitOfMeasure.decimalScale, { positive: true });
       const inventory = item.trackInventory ? inventoryByCatalog.get(item.id) : null;
       if (item.trackInventory && !inventory) throw new EnterpriseRetailError("RETAIL_INVENTORY_ITEM_REQUIRED", 409);
       if (line.stockLotId && (!inventory || lotById.get(line.stockLotId)?.inventoryItemId !== inventory.id)) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
@@ -371,7 +374,7 @@ export async function postPaidRetailInvoiceStockTx(
         warehouseId: checkout.warehouseId,
         storageLocationId: balance.storageLocationId,
         stockLotId: line.stockLotId,
-        movementType: "SALE_FULFILLMENT", direction: "OUT", quantity: take.toNumber(),
+        movementType: "SALE_FULFILLMENT", direction: "OUT", quantity: take.toFixed(),
         sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: checkout.salesInvoiceId,
         sourceLineId: line.invoiceItemId,
         idempotencyKey: `retail-invoice:${checkout.id}:${line.id}:${balance.id}`,

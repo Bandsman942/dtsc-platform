@@ -158,9 +158,9 @@ model EnterpriseTailoringCuttingPlan {
   fabricWidthCm         Decimal? @db.Decimal(10, 2)
   markerLengthCm        Decimal? @db.Decimal(10, 2)
   layers                Int      @default(1)
-  plannedQuantity       Decimal  @db.Decimal(18, 3)
-  cutQuantity           Decimal  @default(0) @db.Decimal(18, 3)
-  wasteQuantity         Decimal  @default(0) @db.Decimal(18, 3)
+  plannedQuantity       Decimal  @db.Decimal(21, 6)
+  cutQuantity           Decimal  @default(0) @db.Decimal(21, 6)
+  wasteQuantity         Decimal  @default(0) @db.Decimal(21, 6)
   markerEfficiency      Decimal? @db.Decimal(8, 4)
   notes                 String?
   createdByUserId       String
@@ -240,7 +240,7 @@ model EnterpriseTailoringGarmentBundle {
   productionOrderId  String
   cuttingPlanId      String?
   sizeCode           String?
-  quantity           Decimal  @db.Decimal(18, 3)
+  quantity           Decimal  @db.Decimal(21, 6)
   status             String   @default("CUT")
   currentWorkCenterId String?
   notes              String?

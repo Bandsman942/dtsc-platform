@@ -224,7 +224,7 @@ model EnterpriseSectorInventoryEvent {
   eventType              String
   eventVersion           Int      @default(1)
   direction              String
-  quantity               Decimal  @db.Decimal(20, 6)
+  quantity               Decimal  @db.Decimal(21, 6)
   unitCost                Decimal? @db.Decimal(20, 6)
   totalValue              Decimal? @db.Decimal(20, 6)
   currencyCode            String?

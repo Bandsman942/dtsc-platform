@@ -302,6 +302,45 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
     await prisma.$disconnect();
   });
 
+  test("Invoice checkout edits six-place catalog quantities before quoting", async ({ page }) => {
+    const configuration = await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({ where: { organizationId } });
+    const product = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const warehouse = await prisma.enterpriseWarehouse.findUniqueOrThrow({ where: { id: fixture.warehouseId } });
+    const unit = await prisma.enterpriseUnitOfMeasure.create({ data: {
+      organizationId, code: `E2E-1229-QTY-${Date.now()}`, name: "E2E six-place unit", symbol: "kg", decimalScale: 6,
+    } });
+    try {
+      await prisma.$transaction([
+        prisma.enterpriseRetailConfiguration.update({ where: { organizationId }, data: { settingsJson: {
+          ...(configuration.settingsJson || {}), invoiceCheckoutEnabled: true,
+        } } }),
+        prisma.enterpriseCatalogItem.update({ where: { id: product.id }, data: { unitOfMeasureId: unit.id } }),
+      ]);
+      await signIn(page);
+      await page.goto(`/enterprise-modules/RETAIL_POS?section=checkout&siteId=${encodeURIComponent(warehouse.siteId)}`);
+      await page.getByRole("combobox", { name: /Boutique et dépôt|Store and warehouse/i }).selectOption(warehouse.id);
+      await page.getByPlaceholder(/Nom, référence ou code article|Item name, reference or code/i).fill(product.code);
+      await page.getByRole("button", { name: new RegExp(product.code) }).click();
+      const quantity = page.getByRole("spinbutton", { name: /Quantité \(kg\)|Quantity \(kg\)/i });
+      await expect(quantity).toHaveAttribute("step", "0.000001");
+      const quote = page.waitForResponse(response =>
+        response.url().includes("/retail/invoice-fx-preview") && response.request().method() === "POST" &&
+        response.request().postDataJSON().lines?.[0]?.quantity === "1.000001");
+      await quantity.fill("1.000001");
+      const accepted = await quote;
+      expect(accepted.ok(), await accepted.text()).toBeTruthy();
+      await expect(quantity).toHaveAttribute("aria-invalid", "false");
+      await quantity.fill("1.0000001");
+      await expect(quantity).toHaveAttribute("aria-invalid", "true");
+    } finally {
+      await prisma.$transaction([
+        prisma.enterpriseCatalogItem.update({ where: { id: product.id }, data: { unitOfMeasureId: product.unitOfMeasureId } }),
+        prisma.enterpriseRetailConfiguration.update({ where: { organizationId }, data: { settingsJson: configuration.settingsJson ?? Prisma.DbNull } }),
+        prisma.enterpriseUnitOfMeasure.delete({ where: { id: unit.id } }),
+      ]);
+    }
+  });
+
   test("POS sale, accounting, idempotency, reversal and last-stock concurrency", async ({ page }) => {
     await signIn(page);
     await ensureOpenTill(page);
@@ -314,6 +353,10 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
     const product = (search.body?.items || []).find((item) => item.id === fixture.catalogItemId);
     expect(product, "Seeded inventory product must be discoverable through the POS server search by code").toBeTruthy();
     expect(product.inventoryItemId).toBe(fixture.inventoryItemId);
+    const unit = await prisma.enterpriseCatalogItem.findUniqueOrThrow({
+      where: { id: fixture.catalogItemId }, select: { unitOfMeasure: { select: { decimalScale: true, name: true, symbol: true } } },
+    });
+    expect(product.unitOfMeasure).toEqual(unit.unitOfMeasure);
 
     const idempotencyKey = `shop2-e2e-sale-${Date.now()}`;
     const salePayload = {
@@ -348,6 +391,19 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
         stockLotId: null,
       },
     });
+
+    const scale = product.unitOfMeasure.decimalScale;
+    const badQuantity = `1.${"0".repeat(scale)}1`;
+    const rejectedPreview = await apiPost(page, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+      currencyCode: fixture.currencyCode, channelCode: "POS", lines: [{ catalogItemId: fixture.catalogItemId, quantity: badQuantity }],
+    });
+    expect(rejectedPreview.response.status(), JSON.stringify(rejectedPreview.body)).toBe(400);
+    const refused = await apiPost(page, `/api/enterprise/${organizationId}/retail/sales`, {
+      ...salePayload, idempotencyKey: idempotencyKey + "-bad-unit",
+      lines: [{ ...salePayload.lines[0], quantity: badQuantity }],
+    });
+    expect(refused.response.status(), JSON.stringify(refused.body)).toBe(400);
+    expect(await prisma.enterpriseRetailSale.count({ where: { organizationId, idempotencyKey: idempotencyKey + "-bad-unit" } })).toBe(0);
 
     const created = await apiPost(page, `/api/enterprise/${organizationId}/retail/sales`, salePayload);
     expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
@@ -745,6 +801,9 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
       expect(scopedAvailable.body.pagination.total).toBe(1);
       expect(scopedAvailable.body.metrics.lowStockCount).toBe(1);
       expect(scopedAvailable.body.items[0].quantityOnHand).toBe(3);
+      expect(scopedAvailable.body.physicalTotals).toHaveLength(1);
+      expect(Number(scopedAvailable.body.physicalTotals[0].value)).toBe(3);
+      expect(scopedAvailable.body.items[0].quantityOnHandExact).toBe("3");
       expect(scopedAvailable.body.items[0].quantityAvailable).toBe(0);
       expect(scopedAvailable.body.items[0].balances.every(row=>row.warehouseId===secondaryWarehouse.id)).toBe(true);
       const forbiddenLotUpdate=await apiJson(await page.context().request.patch(scopedLotsPath,{data:{id:lotA.id,revision:lotA.revision,status:"QUARANTINED",qualityReason:"Forbidden cross-site quality mutation"},headers:{origin:baseUrl,referer:baseUrl+"/enterprise-modules/INVENTORY_LOGISTICS"}}));

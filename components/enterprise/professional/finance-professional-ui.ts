@@ -7,6 +7,7 @@ export type FinanceLocale = "fr" | "en";
 const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
   fr: {
     RESOLVED_CANONICAL: "Justifié par une opération liée",
+    SENT: "Envoyé", ACCEPTED: "Accepté", EXPIRED: "Expiré", CONVERTED: "Converti", ORDERED: "Commandé", PARTIALLY_RECEIVED: "Partiellement reçu", RECEIVED: "Reçu", IN_FULFILLMENT: "En cours de livraison", PARTIALLY_FULFILLED: "Partiellement livré", FULFILLED: "Livré",
     DRAFT: "Brouillon", SUBMITTED: "Soumis", IN_REVIEW: "En revue", PENDING_REVIEW: "En attente de revue", REVIEWED: "Revu",
     PENDING_APPROVAL: "En attente de validation", APPROVED: "Approuvé", ISSUED: "Émis", POSTED: "Comptabilisé", PARTIALLY_PAID: "Partiellement payé",
     PAID: "Payé", OVERDUE: "En retard", DISPUTED: "En litige", WRITTEN_OFF: "Passé en irrécouvrable", CANCELLED: "Annulé", VOID: "Invalidé", VOIDED: "Invalidé",
@@ -19,6 +20,7 @@ const STATUS_LABELS: Record<FinanceLocale, Record<string, string>> = {
   },
   en: {
     RESOLVED_CANONICAL: "Explained by a linked operation",
+    SENT: "Sent", ACCEPTED: "Accepted", EXPIRED: "Expired", CONVERTED: "Converted", ORDERED: "Ordered", PARTIALLY_RECEIVED: "Partially received", RECEIVED: "Received", IN_FULFILLMENT: "Being fulfilled", PARTIALLY_FULFILLED: "Partially fulfilled", FULFILLED: "Fulfilled",
     DRAFT: "Draft", SUBMITTED: "Submitted", IN_REVIEW: "In review", PENDING_REVIEW: "Pending review", REVIEWED: "Reviewed", PENDING_APPROVAL: "Pending approval",
     APPROVED: "Approved", ISSUED: "Issued", POSTED: "Posted", PARTIALLY_PAID: "Partially paid", PAID: "Paid", OVERDUE: "Overdue", DISPUTED: "Disputed",
     WRITTEN_OFF: "Written off", CANCELLED: "Cancelled", VOID: "Voided", VOIDED: "Voided", CREDIT_NOTE: "Credit note", REJECTED: "Rejected", RETURNED: "Returned for correction",

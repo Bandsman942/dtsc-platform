@@ -1,7 +1,9 @@
+import { commercialAmountTotals, commercialPageTotals, commercialStatusCount } from "@/lib/enterprise/common/analytics";
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
-import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -27,15 +29,38 @@ export async function GET(req: Request, { params }: Params) {
     if (from) createdAt.gte = new Date(from + "T00:00:00.000Z");
     if (to) { const end = new Date(to + "T00:00:00.000Z"); end.setUTCDate(end.getUTCDate() + 1); createdAt.lt = end; }
     filters.push({ createdAt }); } if (expectedBefore) filters.push({ expectedAt: { lte: new Date(expectedBefore) } });
-  const where: Prisma.EnterprisePurchaseWhereInput = { AND: [base, ...filters] }; const [items, total, drafts, pending, ordered, receiving, received] = await Promise.all([prisma.enterprisePurchase.findMany({ where, orderBy: { createdAt: "desc" }, skip: (page - 1) * pageSize, take: pageSize, include: { supplier: { select: { id: true, legalName: true, displayName: true, status: true } }, budgetLine: { select: { id: true, name: true, budget: { select: { id: true, reference: true, title: true, currency: true, status: true } } } }, _count: { select: { items: true, receipts: true } } } }), prisma.enterprisePurchase.count({ where }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "DRAFT" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "PENDING_APPROVAL" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "ORDERED" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "PARTIALLY_RECEIVED" }] } }), prisma.enterprisePurchase.count({ where: { AND: [base, { status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 30 * 86400000) } }] } })]);
+  const where: Prisma.EnterprisePurchaseWhereInput = { AND: [base, ...filters] };
+  const { items, total, filteredGroups, generalGroups, received, generalReceived } = await prisma.$transaction(async tx => {
+    const [items, total, filteredGroups, generalGroups, received, generalReceived] = await Promise.all([
+      tx.enterprisePurchase.findMany({ where, orderBy: [{ createdAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { supplier: { select: { id: true, legalName: true, displayName: true, status: true } }, budgetLine: { select: { id: true, name: true, budget: { select: { id: true, reference: true, title: true, currency: true, status: true } } } }, _count: { select: { items: true, receipts: true } } } }),
+      tx.enterprisePurchase.count({ where }),
+      tx.enterprisePurchase.groupBy({ by: ["currency", "status"], where, _sum: { subtotalAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+      tx.enterprisePurchase.groupBy({ by: ["currency", "status"], where: base, _sum: { subtotalAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+      tx.enterprisePurchase.count({ where: { AND: [where, { status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 30 * 86400000) } }] } }),
+      tx.enterprisePurchase.count({ where: { AND: [base, { status: "RECEIVED", receivedAt: { gte: new Date(Date.now() - 30 * 86400000) } }] } }),
+    ]);
+    return { items, total, filteredGroups, generalGroups, received, generalReceived };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const drafts = commercialStatusCount(filteredGroups, ["DRAFT"]);
+  const pending = commercialStatusCount(filteredGroups, ["PENDING_APPROVAL"]);
+  const ordered = commercialStatusCount(filteredGroups, ["ORDERED"]);
+  const receiving = commercialStatusCount(filteredGroups, ["PARTIALLY_RECEIVED"]);
+  const generalMetrics = { drafts: commercialStatusCount(generalGroups, ["DRAFT"]), pending: commercialStatusCount(generalGroups, ["PENDING_APPROVAL"]), ordered: commercialStatusCount(generalGroups, ["ORDERED"]), receiving: commercialStatusCount(generalGroups, ["PARTIALLY_RECEIVED"]), received: generalReceived };
   const assigned = items.length ? await prisma.enterpriseApproval.findMany({ where: { organizationId, targetEntityType: "EnterprisePurchase", targetEntityId: { in: items.map((item) => item.id) }, approverUserId: session.userId, status: "PENDING", archivedAt: null }, select: { id: true, targetEntityId: true, revision: true } }) : [];
   const byPurchase = new Map(assigned.map((approval) => [approval.targetEntityId, { id: approval.id, revision: approval.revision }]));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases", page } });
-  return NextResponse.json({ items: items.map((item) => ({ ...item, pendingAssignedApproval: item.status === "PENDING_APPROVAL" ? byPurchase.get(item.id) || null : null })), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { drafts, pending, ordered, receiving, received }, canManage: access.canManage, currentUserId: session.userId }, { headers: { "Cache-Control": "private, no-store" } });
+  return NextResponse.json({ filteredTotals: commercialAmountTotals(filteredGroups), generalTotals: commercialAmountTotals(generalGroups), pageTotals: commercialPageTotals(items), generalMetrics, items: items.map((item) => ({ ...item, pendingAssignedApproval: item.status === "PENDING_APPROVAL" ? byPurchase.get(item.id) || null : null })), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { drafts, pending, ordered, receiving, received }, canManage: access.canManage, currentUserId: session.userId }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {
   const startedAt = Date.now(); if (!isSameOriginRequest(req)) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const session = await getSession(); if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 }); const limited = await rateLimit(getRateLimitKey(req, `enterprise-purchase-create:${session.userId}`), 80, 60 * 60 * 1000); if (!limited.ok) return NextResponse.json({ error: "Too many requests" }, { status: 429 }); const { organizationId } = await params; const access = await getEnterpriseProcurementAccess({ session, organizationId, moduleCode: "SUPPLIERS_PURCHASES", action: "write" }); if (!access) return NextResponse.json({ error: "Forbidden" }, { status: 403 }); const parsed = enterprisePurchaseCreateSchema.safeParse(await req.json().catch(() => null)); if (!parsed.success) return enterpriseValidationErrorResponse(parsed.error, "PURCHASE_INPUT_INVALID", req);
   try { const purchase = await createEnterprisePurchase(organizationId, session.userId, parsed.data); const logResults = await Promise.allSettled([writeAuditLog({ userId: session.userId, action: "ENTERPRISE_PURCHASE_CREATED", entity: "EnterprisePurchase", entityId: purchase.id, request: req, metadata: { organizationId, reference: purchase.reference, totalAmount: purchase.totalAmount.toString(), currency: purchase.currency, budgetLineId: purchase.budgetLineId } }), writeApiLog({ request: req, statusCode: 201, userId: session.userId, startedAt, metadata: { organizationId, domain: "purchases" } })]); if (logResults.some((result) => result.status === "rejected")) console.error("PURCHASE_POST_COMMIT_AUDIT_FAILED", { organizationId, purchaseId: purchase.id }); return NextResponse.json({ ok: true, purchase }, { status: 201 }); }
-  catch (error) { const normalized = normalizeEnterpriseCoreV2Error(error); if (normalized.status < 500) return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status }); const incidentId = randomUUID(); console.error("PURCHASE_CREATE_INTERNAL_ERROR", { incidentId, organizationId, errorType: error instanceof Error ? error.name : typeof error }); return NextResponse.json({ error: normalized.code, message: `${normalized.message} Référence incident : ${incidentId}.`, incidentId }, { status: normalized.status }); }
+  catch (error) {
+    if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, "PURCHASE_CREATE_FAILED", req);
+    const normalized = normalizeEnterpriseCoreV2Error(error);
+    if (normalized.status < 500) return NextResponse.json({ error: normalized.code, message: normalized.message }, { status: normalized.status });
+    const incidentId = randomUUID();
+    console.error("PURCHASE_CREATE_INTERNAL_ERROR", { incidentId, organizationId, errorType: error instanceof Error ? error.name : typeof error });
+    return NextResponse.json({ error: normalized.code, message: `${normalized.message} Référence incident : ${incidentId}.`, incidentId }, { status: normalized.status });
+  }
 }

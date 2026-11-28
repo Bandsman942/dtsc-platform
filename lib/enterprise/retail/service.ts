@@ -7,6 +7,7 @@ import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service
 import { money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx } from "@/lib/enterprise/retail/accounting";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -23,8 +24,10 @@ import { applyRetailRelationshipLoyaltyTx, reverseRetailRelationshipLoyaltyTx } 
 import { applyRetailRelationshipCashbackTx, reverseRetailRelationshipCashbackTx } from "@/lib/enterprise/relationship-benefits/retail-cashback";
 import { changeRelationalStoreCreditTx } from "@/lib/enterprise/retail/relationship-store-credit";
 import { resolveMobileMoneyFloatAccountTx } from "@/lib/enterprise/retail/mobile-money-multicurrency-service";
+import { assertMobileMoneyOperationAccess } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { resolveTelcoFloatAccountTx } from "@/lib/enterprise/retail/telco-multicurrency-service";
 import type { mobileMoneyCreateSchema, retailDailyCloseCreateSchema, retailDailyCloseDecisionSchema, retailProviderUpsertSchema, retailSaleCreateSchema, retailSaleReverseSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
+import { finalizeMobileMoneyReversalAccountingTx } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { prisma } from "@/lib/prisma";
 import type { z } from "zod";
 
@@ -98,6 +101,19 @@ async function assertOpenCashSession(tx: Prisma.TransactionClient, organizationI
   return session;
 }
 
+function assertSufficientAccountEffect(
+  account: { id: string; operationalBalance: Prisma.Decimal },
+  effect: Prisma.Decimal,
+  hideAvailableBalance = false,
+) {
+  if (effect.lessThan(0) && account.operationalBalance.lessThan(effect.abs())) {
+    const requiredAmount = effect.abs().toFixed();
+    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, hideAvailableBalance
+      ? { requiredAmount }
+      : { financialAccountId: account.id, requiredAmount, availableBalance: account.operationalBalance.toFixed() });
+  }
+}
+
 async function applyAccountEffectTx(
   tx: Prisma.TransactionClient,
   input: {
@@ -110,14 +126,13 @@ async function applyAccountEffectTx(
     transactionDate: Date;
     cashSessionId?: string | null;
     cashReason?: string | null;
+    hideAvailableBalance?: boolean;
   },
 ) {
   if (input.effect.isZero()) return;
   const outbound = input.effect.isNegative();
   const amount = input.effect.abs();
-  if (outbound && input.account.operationalBalance.lessThan(amount)) {
-    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, { financialAccountId: input.account.id, requiredAmount: amount.toFixed(), availableBalance: input.account.operationalBalance.toFixed() });
-  }
+  assertSufficientAccountEffect(input.account, input.effect, input.hideAvailableBalance);
   await tx.enterpriseFinancialAccount.update({
     where: { id: input.account.id },
     data: { operationalBalance: outbound ? { decrement: amount } : { increment: amount }, revision: { increment: 1 } },
@@ -201,7 +216,7 @@ export async function createRetailSale(
       input.customerBusinessPartyId ? tx.enterpriseBusinessParty.findFirst({ where: { id: input.customerBusinessPartyId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }) : Promise.resolve(null),
       tx.enterpriseCatalogItem.findMany({
         where: { id: { in: catalogItemIds }, organizationId, status: "ACTIVE", archivedAt: null },
-        select: { id: true, name: true, currency: true, trackInventory: true },
+        select: { id: true, name: true, currency: true, trackInventory: true, unitOfMeasure: { select: { decimalScale: true } } },
       }),
       tx.enterpriseInventoryItem.findMany({
         where: { organizationId, catalogItemId: { in: catalogItemIds }, status: "ACTIVE", archivedAt: null },
@@ -236,7 +251,7 @@ export async function createRetailSale(
         }
         inventoryItemId = inventoryItem.id;
       }
-      const quantity = decimal(line.quantity);
+      const quantity = requireInventoryQuantity(line.quantity, catalogItem.unitOfMeasure.decimalScale, { positive: true });
       const unitPrice = decimal(line.unitPrice);
       const discountAmount = decimal(line.discountAmount || 0);
       const taxAmount = decimal(line.taxAmount || 0);
@@ -343,7 +358,7 @@ export async function createRetailSale(
         stockLotId: line.stockLotId,
         movementType: "SALE_FULFILLMENT",
         direction: "OUT",
-        quantity: Number(line.quantity),
+        quantity: line.quantity.toFixed(),
         sourceEntityType: "EnterpriseRetailSale",
         sourceEntityId: sale.id,
         sourceLineId: line.id,
@@ -412,7 +427,7 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
         stockLotId: line.stockLotId,
         movementType: "RETURN_IN",
         direction: "IN",
-        quantity: Number(line.quantity),
+        quantity: line.quantity.toFixed(),
         sourceEntityType: "EnterpriseRetailSale",
         sourceEntityId: sale.id,
         sourceLineId: line.id,
@@ -457,6 +472,60 @@ async function getRetailProviderTx(tx: Prisma.TransactionClient, organizationId:
   return provider;
 }
 
+async function resolveMobileMoneyOperationAccountsTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+) {
+  const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
+  if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
+  const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
+  const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
+  const floatAccount = resolvedFloatAccount.account;
+  if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
+  const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, cashAccount.id, floatAccount.id);
+  return { provider, cashAccount, floatAccount, authority };
+}
+
+async function prepareMobileMoneyTransactionTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+) {
+  const accounts = await resolveMobileMoneyOperationAccountsTx(tx, organizationId, actorUserId, input);
+  const cashSession = await assertOpenCashSession(tx, organizationId, accounts.cashAccount.id, actorUserId);
+  const principal = decimal(input.principalAmount);
+  const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
+  const cashEffect = input.transactionType === "DEPOSIT" ? principal.plus(cashFee) : principal.negated().plus(cashFee);
+  const floatEffect = input.transactionType === "DEPOSIT" ? principal.negated() : principal;
+  return { ...accounts, cashSession, principal, cashEffect, floatEffect };
+}
+
+export async function assertConnectedMobileMoneyIntentTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  actorUserId: string,
+  input: MobileMoneyInput,
+  replay: boolean,
+) {
+  await assertRetailOrganization(tx, organizationId);
+  const existing = await tx.enterpriseMobileMoneyTransaction.findFirst({
+    where: { organizationId, idempotencyKey: input.idempotencyKey },
+    select: { cashAccountId: true, floatAccountId: true },
+  });
+  if (replay) {
+    if (existing) await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, existing.cashAccountId, existing.floatAccountId);
+    else await resolveMobileMoneyOperationAccountsTx(tx, organizationId, actorUserId, input);
+    return;
+  }
+  if (existing) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  const { cashAccount, floatAccount, cashEffect, floatEffect, authority } = await prepareMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
+  assertSufficientAccountEffect(cashAccount, cashEffect);
+  assertSufficientAccountEffect(floatAccount, floatEffect, authority.hideFloatBalance);
+}
+
 async function createMobileMoneyTransactionTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
@@ -466,64 +535,75 @@ async function createMobileMoneyTransactionTx(
   await assertRetailOrganization(tx, organizationId);
   await ensureRetailConfigurationTx(tx, organizationId, actorUserId);
   const existing = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { organizationId, idempotencyKey: input.idempotencyKey } });
-  if (existing) return { transaction: existing, idempotent: true };
-  const provider = await getRetailProviderTx(tx, organizationId, input.providerCode);
-  if (!["MOBILE_MONEY", "BOTH"].includes(provider.providerType)) throw new EnterpriseRetailError("RETAIL_PROVIDER_NOT_FOUND", 409, { providerCode: input.providerCode });
-  const cashAccount = await assertFinancialAccount(tx, organizationId, input.cashAccountId, input.currencyCode, ["CASH"]);
-  const resolvedFloatAccount = await resolveMobileMoneyFloatAccountTx(tx, organizationId, provider, input.currencyCode);
-  const floatAccount = resolvedFloatAccount.account;
-  if (cashAccount.id === floatAccount.id) throw new EnterpriseRetailError("RETAIL_FINANCIAL_ACCOUNT_INVALID", 409);
-  const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
-  const principal = decimal(input.principalAmount);
-  const cashFee = input.feeCollectionMode === "CASH" ? decimal(input.customerFeeAmount || 0) : decimal(0);
-  const cashEffect = input.transactionType === "DEPOSIT" ? principal.plus(cashFee) : principal.negated().plus(cashFee);
-  const floatEffect = input.transactionType === "DEPOSIT" ? principal.negated() : principal;
+  if (existing) {
+    await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, existing.cashAccountId, existing.floatAccountId);
+    return { transaction: existing, idempotent: true };
+  }
+  const { provider, cashAccount, floatAccount, authority, cashSession, principal, cashEffect, floatEffect } =
+    await prepareMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
   const occurredAt = input.occurredAt || new Date();
   const number = retailReference("MM");
   const transaction = await tx.enterpriseMobileMoneyTransaction.create({ data: { organizationId, number, providerCode: provider.providerCode, transactionType: input.transactionType, customerPhone: input.customerPhone, currencyCode: input.currencyCode, principalAmount: principal, customerFeeAmount: decimal(input.customerFeeAmount || 0), providerCommissionAmount: decimal(input.providerCommissionAmount || 0), feeCollectionMode: input.feeCollectionMode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id, cashEffectAmount: cashEffect, floatEffectAmount: floatEffect, externalReference: input.externalReference || null, occurredAt, agentUserId: actorUserId, idempotencyKey: input.idempotencyKey } });
   await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: cashEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_CASH`, reference: number, transactionDate: occurredAt, cashSessionId: cashSession.id, cashReason: `${provider.label} ${input.transactionType}` });
-  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: floatEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_FLOAT`, reference: number, transactionDate: occurredAt });
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: floatEffect, transactionType: `MOBILE_MONEY_${input.transactionType}_FLOAT`, reference: number, transactionDate: occurredAt, hideAvailableBalance: authority.hideFloatBalance });
   await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: `MOBILE_MONEY_${input.transactionType}_CONFIRMED`, summary: `${provider.label} ${input.transactionType} ${number}`, actorUserId, toStatus: "CONFIRMED", metadataJson: { principal: principal.toFixed(), customerFee: transaction.customerFeeAmount.toFixed(), providerCommission: transaction.providerCommissionAmount.toFixed(), currency: input.currencyCode, cashAccountId: cashAccount.id, floatAccountId: floatAccount.id } });
   return { transaction, idempotent: false };
 }
 
-export async function createMobileMoneyTransaction(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
+export async function createMobileMoneyTransactionWithPostingTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, input: MobileMoneyInput) {
+  const result = await createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
+  await ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, result.transaction.id);
+  const accounting = await postBusinessEventTx(tx, organizationId, actorUserId, {
+    postingEvent: "RETAIL_MOBILE_MONEY_POSTED",
+    sourceEntityType: "EnterpriseMobileMoneyTransaction",
+    sourceEntityId: result.transaction.id,
+  });
+  return { ...result, accounting };
+}
+
+export async function createMobileMoneyTransactionWithPosting(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
   return prisma.$transaction(
-    (tx) => createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input),
+    tx => createMobileMoneyTransactionWithPostingTx(tx, organizationId, actorUserId, input),
     { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
   );
 }
 
-export async function createMobileMoneyTransactionWithPosting(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
-  return prisma.$transaction(async (tx) => {
-    const result = await createMobileMoneyTransactionTx(tx, organizationId, actorUserId, input);
-    await ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, result.transaction.id);
-    const accounting = await postBusinessEventTx(tx, organizationId, actorUserId, {
-      postingEvent: "RETAIL_MOBILE_MONEY_POSTED",
-      sourceEntityType: "EnterpriseMobileMoneyTransaction",
-      sourceEntityId: result.transaction.id,
-    });
-    return { ...result, accounting };
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
+async function reverseMobileMoneyTransactionTx(
+  tx: Prisma.TransactionClient,
+  organizationId: string,
+  transactionId: string,
+  actorUserId: string,
+  input: RetailSaleReverseInput,
+) {
+  await assertRetailOrganization(tx, organizationId);
+  await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyTransaction" WHERE id = ${transactionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+  const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { id: transactionId, organizationId } });
+  if (!transaction) throw new EnterpriseRetailError("RETAIL_TRANSACTION_NOT_FOUND", 404);
+  const authority = await assertMobileMoneyOperationAccess(tx, organizationId, actorUserId, transaction.cashAccountId, transaction.floatAccountId);
+  if (transaction.status === "REVERSED") return transaction;
+  if (transaction.status !== "CONFIRMED" || transaction.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_TRANSACTION_CONFLICT", 409);
+  const cashAccount = await assertFinancialAccount(tx, organizationId, transaction.cashAccountId, transaction.currencyCode, ["CASH"]);
+  const floatAccount = await assertFinancialAccount(tx, organizationId, transaction.floatAccountId, transaction.currencyCode, ["MOBILE_MONEY"]);
+  const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
+  const reversedAt = new Date();
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: transaction.cashEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_CASH", reference: transaction.number, transactionDate: reversedAt, cashSessionId: cashSession.id, cashReason: input.reason });
+  await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: transaction.floatEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_FLOAT", reference: transaction.number, transactionDate: reversedAt, hideAvailableBalance: authority.hideFloatBalance });
+  const updated = await tx.enterpriseMobileMoneyTransaction.update({ where: { id: transaction.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt, reversedByUserId: actorUserId, revision: { increment: 1 } } });
+  await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: "MOBILE_MONEY_REVERSED", summary: `Opération ${transaction.number} annulée`, actorUserId, fromStatus: "CONFIRMED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
+  return updated;
 }
 
-export async function reverseMobileMoneyTransaction(organizationId: string, transactionId: string, actorUserId: string, input: RetailSaleReverseInput) {
-  return prisma.$transaction(async (tx) => {
-    await assertRetailOrganization(tx, organizationId);
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyTransaction" WHERE id = ${transactionId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { id: transactionId, organizationId } });
-    if (!transaction) throw new EnterpriseRetailError("RETAIL_TRANSACTION_NOT_FOUND", 404);
-    if (transaction.status === "REVERSED") return transaction;
-    if (transaction.status !== "CONFIRMED" || transaction.revision !== input.revision) throw new EnterpriseRetailError("RETAIL_TRANSACTION_CONFLICT", 409);
-    const cashAccount = await assertFinancialAccount(tx, organizationId, transaction.cashAccountId, transaction.currencyCode, ["CASH"]);
-    const floatAccount = await assertFinancialAccount(tx, organizationId, transaction.floatAccountId, transaction.currencyCode, ["MOBILE_MONEY"]);
-    const cashSession = await assertOpenCashSession(tx, organizationId, cashAccount.id, actorUserId);
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: cashAccount, effect: transaction.cashEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_CASH", reference: transaction.number, transactionDate: new Date(), cashSessionId: cashSession.id, cashReason: input.reason });
-    await applyAccountEffectTx(tx, { organizationId, actorUserId, account: floatAccount, effect: transaction.floatEffectAmount.negated(), transactionType: "MOBILE_MONEY_REVERSAL_FLOAT", reference: transaction.number, transactionDate: new Date() });
-    const updated = await tx.enterpriseMobileMoneyTransaction.update({ where: { id: transaction.id }, data: { status: "REVERSED", reversalReason: input.reason, reversedAt: new Date(), reversedByUserId: actorUserId, revision: { increment: 1 } } });
-    await publishFinanceEvent(tx, { organizationId, entityType: "EnterpriseMobileMoneyTransaction", entityId: transaction.id, eventType: "MOBILE_MONEY_REVERSED", summary: `Opération ${transaction.number} annulée`, actorUserId, fromStatus: "CONFIRMED", toStatus: "REVERSED", metadataJson: { reason: input.reason.slice(0, 500) } });
-    return updated;
-  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, timeout: 30000 });
+export async function reverseMobileMoneyTransactionWithPosting(
+  organizationId: string,
+  transactionId: string,
+  actorUserId: string,
+  input: RetailSaleReverseInput,
+) {
+  return prisma.$transaction(async tx => {
+    const transaction = await reverseMobileMoneyTransactionTx(tx, organizationId, transactionId, actorUserId, input);
+    const accounting = await finalizeMobileMoneyReversalAccountingTx(tx, organizationId, actorUserId, transaction.id);
+    return { transaction, accounting };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
 export async function createTelcoTopupTx(

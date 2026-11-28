@@ -1,10 +1,12 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { EnterpriseAccountingError } from "@/lib/enterprise/accounting/errors";
-import { getChartTemplate, chartTemplateReference, DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE } from "@/lib/enterprise/accounting/chart-template-registry";
+import { getChartTemplate, getDefaultChartTemplate, chartTemplateReference, DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE } from "@/lib/enterprise/accounting/chart-template-registry";
 import type { AccountingChartTemplateDefinition } from "@/lib/enterprise/accounting/chart-template-types";
 import { validateTemplateSemanticCoverage } from "@/lib/enterprise/accounting/semantic-account-registry";
 import { publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
+import { buildMerchandiseChartDraft } from "@/lib/enterprise/accounting/syscohada-merchandise-policy-draft";
+import syscohadaSource from "@/lib/enterprise/accounting/templates/syscohada/source-manifest.json";
 
 export type AccountingTemplateDiff = {
   fromReference: string;
@@ -97,6 +99,40 @@ export function diffAccountingTemplates(from: AccountingChartTemplateDefinition,
   };
 }
 
+export async function previewSyscohadaMerchandisePolicy(organizationId: string, chartId: string) {
+  return prisma.$transaction(async tx => {
+    const chart = await tx.enterpriseChartOfAccounts.findFirst({
+      where: { organizationId, id: chartId },
+      select: { templateCode: true },
+    });
+    if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_NOT_FOUND", 404);
+    if (chart.templateCode !== DEFAULT_ACCOUNTING_TEMPLATE_REFERENCE) {
+      throw new EnterpriseAccountingError("CHART_TEMPLATE_UPGRADE_TARGET_INVALID", 409);
+    }
+    const current = getDefaultChartTemplate();
+    const draft = buildMerchandiseChartDraft(current);
+    const diff = diffAccountingTemplates(current, draft);
+    const [journalHistoryCount, accountConflicts] = await Promise.all([
+      tx.enterpriseJournalEntry.count({ where: { organizationId, status: { in: ["POSTED", "REVERSED"] } } }),
+      tx.enterpriseLedgerAccount.findMany({
+        where: { organizationId, code: { in: diff.accounts.added.map(account => account.code) } },
+        select: { code: true, nameFr: true, nameEn: true },
+        orderBy: { code: "asc" },
+      }),
+    ]);
+    return {
+      status: draft.status,
+      diff,
+      journalHistoryCount,
+      accountConflicts,
+      sourceUrl: syscohadaSource.officialDigitalLibrary.url,
+      canApplyAutomatically: false,
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+}
+
+export type SyscohadaMerchandiseComparison = Awaited<ReturnType<typeof previewSyscohadaMerchandisePolicy>>;
+
 export async function previewChartTemplateUpgrade(organizationId: string, chartId: string, targetTemplateReference: string) {
   const chart = await prisma.enterpriseChartOfAccounts.findFirst({ where: { id: chartId, organizationId } });
   if (!chart) throw new EnterpriseAccountingError("CHART_OF_ACCOUNTS_NOT_FOUND", 404);
@@ -108,7 +144,7 @@ export async function previewChartTemplateUpgrade(organizationId: string, chartI
   if (chartTemplateReference(from) === chartTemplateReference(to)) return { chart, diff: diffAccountingTemplates(from, to), postedEntries: 0, customAccountCount: 0, requiresHumanDecision: false, canApplyAutomatically: true };
   const templateCodes = new Set(from.accounts.map((account) => account.code));
   const [postedEntries, organizationAccounts] = await Promise.all([
-    prisma.enterpriseJournalEntry.count({ where: { organizationId, status: "POSTED" } }),
+    prisma.enterpriseJournalEntry.count({ where: { organizationId, status: { in: ["POSTED", "REVERSED"] } } }),
     prisma.enterpriseLedgerAccount.findMany({ where: { organizationId, chartId }, select: { code: true, isSystemAccount: true } }),
   ]);
   const customAccountCount = organizationAccounts.filter((account) => !templateCodes.has(account.code)).length;

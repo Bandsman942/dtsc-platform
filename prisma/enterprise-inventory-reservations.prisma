@@ -6,8 +6,8 @@ model EnterpriseInventoryReservation {
   inventoryItemId      String
   warehouseId          String
   storageLocationId    String?
-  quantity             Decimal  @db.Decimal(20, 6)
-  fulfilledQuantity    Decimal  @default(0) @db.Decimal(20, 6)
+  quantity             Decimal  @db.Decimal(21, 6)
+  fulfilledQuantity    Decimal  @default(0) @db.Decimal(21, 6)
   lotAllocations       Json?
   status               String   @default("ACTIVE")
   idempotencyKey       String

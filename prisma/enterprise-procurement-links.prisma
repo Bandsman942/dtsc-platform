@@ -51,6 +51,9 @@ model EnterprisePurchaseItemCatalogLink {
   purchaseItemId   String
   catalogItemId    String?
   unitOfMeasureId  String?
+  // Null for historical links without a provable precision snapshot.
+  unitDecimalScale Int?
+  unitCodeSnapshot String?
   expectedItemType String   @default("GOODS")
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

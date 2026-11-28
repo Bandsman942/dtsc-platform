@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { receiptLotAllocationsSchema } from "@/lib/enterprise/procurement/receipt-lot-schema";
+import { purchaseQuantitySchema, receiptLotAllocationsSchema } from "@/lib/enterprise/procurement/receipt-lot-schema";
 import {
   ENTERPRISE_DOCUMENT_STATUSES,
   ENTERPRISE_DOCUMENT_TYPES,
@@ -104,7 +104,7 @@ export const enterpriseSupplierActionSchema = z.object({ revision, action: z.enu
 const purchaseItemSchema = z.object({
   catalogItemId: z.string().trim().min(1).max(180),
   description: z.string().trim().min(2).max(1000),
-  quantity: z.coerce.number().positive().max(1_000_000),
+  quantity: purchaseQuantitySchema,
   unit: z.string().trim().min(1).max(80),
   unitPrice: z.coerce.number().min(0).max(1_000_000_000),
   taxRate: z.coerce.number().min(0).max(100).default(0),
@@ -164,7 +164,7 @@ export const enterprisePurchaseReceiptSchema = z.object({
   warehouseId: optionalId,
   storageLocationId: optionalId,
   notes: optionalText(5000),
-  items: z.array(z.object({ purchaseItemId: z.string().trim().min(1).max(180), quantityReceived: z.coerce.number().positive().max(1_000_000) })).min(1).max(200),
+  items: z.array(z.object({ purchaseItemId: z.string().trim().min(1).max(180), quantityReceived: purchaseQuantitySchema })).min(1).max(200),
 });
 
 export const enterpriseSprint7OperationalCommentSchema = z.object({

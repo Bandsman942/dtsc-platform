@@ -1,0 +1,97 @@
+# Recette propriétaire #1228
+
+La recette concerne la PR #1229 et la version candidate 1.24.5. Exécuter les scénarios sur le commit proposé pour l’E2E, dans une installation isolée. Le cahier des charges et les preuves automatiques restent dans [le dossier du hotfix](HOTFIX_1228_DATA_INTELLIGENCE_CONSISTENCY.md).
+
+## Comptes et données
+
+| Élément | Jeu de recette |
+|---|---|
+| Organisation A | Une entreprise Retail avec deux boutiques, un entrepôt par boutique, des comptes de trésorerie en CDF et USD et un exercice ouvert |
+| Organisation B | Une seconde entreprise avec un article et une référence de vente identiques à ceux de l’organisation A |
+| Acteurs | Administrateur d’A, opérateur affecté à la première boutique, validateur distinct, responsable Finance, acteur d’une autre organisation |
+| Articles | Pièce à zéro décimale, litres à trois décimales et unité de test à six décimales. Un article de la première boutique possède deux lots de dates distinctes |
+| Volumes | Au moins 51 fiches dans le résultat filtré. Des fiches supplémentaires hors période et hors boutique rendent visibles les effets des filtres |
+
+## Quantités et opérations
+
+1. Ouvrir Stock & logistique, Valorisation et le rapport journalier de fermeture pour les trois articles. Vérifier les symboles et la précision de l’unité sur les listes, les détails et les exports. Une quantité historique plus précise que l’unité doit rester lisible avec son signalement.
+   Dans le POS, ajouter un article à l’unité entière et un article à six décimales. Vérifier le symbole et le pas dans le panier. Essayer une fraction pour la pièce et une septième décimale pour le second article. Vérifier leur refus dans le panier, par l’aperçu et par soumission directe. Contrôler une quantité compatible jusqu’à la vente, au reçu et au mouvement.
+   Reprendre le même article dans **Préparer une facture**. Un aperçu de `1,000001` doit être disponible et la validation doit refuser `1,0000001`. Comparer l’unité et la quantité du brouillon et de l’aperçu imprimable. Pour le paiement direct, vérifier qu’une relance du même panier reprend le paiement existant.
+   Depuis une facture Retail dont les lots sont sortis, ouvrir **Annulation et avoirs**. Vérifier le pas et le symbole de l’unité. Une quantité à six décimales doit être conservée dans l’avoir si l’unité et le montant le permettent. Répartir la quantité sur deux lots et modifier le total d’un seul millionième pour vérifier le refus. Sur une autre ligne à l’unité entière, essayer un retour de 0,5 et vérifier son refus.
+2. Ouvrir un transfert, un comptage et un ajustement. Sélectionner successivement la pièce et l’unité à six décimales. Vérifier que la pièce refuse 0,5, que l’unité de test accepte 0,000001 et refuse 0,0000001, et que le comptage accepte zéro. Vérifier le refus serveur avec un utilisateur ayant le droit de soumettre, puis avec un utilisateur non habilité.
+3. Créer un achat de 0,000007 dans l’unité de test. Après approbation et commande, réceptionner 0,000003 puis 0,000004. Contrôler le reliquat 0,000004 puis zéro et vérifier 0,000007 dans l’aperçu A4. Sur un autre achat en cours, modifier l’unité catalogue et vérifier que le document signale le conflit avant tout mouvement de stock.
+4. Tester l’achat, la vente et le stockage avec deux unités configurées lorsque le parcours de conversion est disponible. Contrôler le facteur réel, l’unité cible et la trace du facteur employé. Un changement de configuration ultérieur doit conserver l’historique du document.
+5. Sur un article de recette avec un carton à trois décimales et une unité de stock entière, configurer un carton pour huit unités. Dans Stock & logistique, soumettre `0,125` carton et vérifier que le validateur voit les deux quantités. Après l’expédition d’une unité, créer une deuxième version à seize unités par carton. La réception doit enregistrer une unité et conserver la première version. Le rejeu ne crée aucun second mouvement. Sur un autre transfert en transit, modifier le code de l’unité de stock dans la recette et vérifier le refus de la réception tant que cette incohérence existe.
+5. Réserver et livrer une partie d’un lot, transférer un autre lot et effectuer un retour. Contrôler séparément stock physique, réservations, stock disponible et quantités valorisées. Vérifier que le transfert conserve la quantité et la valeur entre les deux entrepôts.
+
+## Filtres, exports et droits
+
+Dans **Clôture magasin → Rapport journalier des stocks**, choisir une boutique et une date avec des réceptions et des ventes de part et d’autre de minuit. Rechercher un article de façon à répartir le résultat sur deux pages. Les totaux filtré et boutique restent stables, le sous-total de page change. Comparer le détail et les deux totaux dans le CSV, le classeur et l’aperçu PDF avec le français puis l’anglais. Une date antérieure ne présente pas les réservations actuelles.
+
+1. Filtrer par boutique, période exacte puis intervalle, statut et texte métier. Relever le nombre de résultats, le sous-total filtré et le sous-total de page. Changer de page, y compris vers un résultat vide. Le sous-total filtré doit rester identique et le général doit rester borné aux droits de l’acteur.
+2. Reprendre le même jeu de filtres sur Stock, Ventes, Achats, Factures, Créances, Dettes, Paiements, Trésorerie, Caisse et Comptabilité. Vérifier que les totaux par devise sont distincts et que les entrées et sorties de trésorerie restent attribuées à leurs comptes. Vérifier les agrégats sectoriels applicables dans le périmètre de l’organisation.
+3. Exporter les mêmes résultats en CSV, XLSX et PDF lorsqu’ils sont proposés sur le registre. Rapprocher le nombre de lignes, les filtres, les sous-totaux, les libellés et les devises. Les quantités dépassant la précision numérique d’Excel doivent rester exactes dans les cellules.
+4. Répéter avec l’opérateur d’une seule boutique, le validateur et l’acteur d’une autre organisation. Tenter l’ouverture depuis l’interface et la lecture directe des API et exports. Les listes, quantités, projections historiques et totaux doivent respecter le même périmètre.
+
+## Comptabilité
+
+Dans le registre des immobilisations, préparer des actifs en CDF et USD avec des amortissements planifiés, comptabilisés et contrepassés. Filtrer par statut et date de mise en service, puis comparer les totaux sur trois pages et dans les exports. Seules les écritures d’amortissement confirmées réduisent la valeur nette. Un actif dont la sortie est comptabilisée a une valeur nette restante nulle. Pour un actif signalé sans preuve comptable, vérifier le message à l’écran et dans les exports.
+
+1. Créer une sortie de stock valorisée puis ouvrir le journal et le grand livre. Vérifier la référence, la désignation enregistrée, le coût, les comptes, l’équilibre et l’idempotence. Après renommage de l’article, vérifier que la désignation du posting d’origine reste lisible.
+2. Ouvrir une écriture historique et vérifier la distinction entre désignation enregistrée, désignation actuelle retrouvée et référence introuvable. Contrôler aussi la recherche et l’export.
+3. Reproduire sur une organisation de recette l’imputation de la pièce auditée, une livraison de facture client valorisée au coût moyen pondéré avec SYSCOHADA 0.1.0. Vérifier la politique versionnée depuis la réception et la facture fournisseur jusqu’à la sortie, aux retours et aux états. Comparer les références historiques avant et après le changement de version.
+4. Dans Comptabilité → Configurer → Mise en service, sélectionner le plan SYSCOHADA 0.1.0 et ouvrir **Comparer la politique marchandises**. Vérifier le compte proposé, le signalement si son code existe et le total des écritures comptabilisées ou contrepassées. À partir du grand livre et de la balance, contrôler une ligne portant six décimales et la rapprocher de l’export.
+
+## Présentation et validation
+
+Tester les largeurs 320, 360, 375, 390, 414, 768, 1024 et 1440 px, les interfaces FR/EN et les thèmes clair/sombre. Vérifier le clavier, le focus visible, les messages et la lecture des nombres longs. Sur mobile, le rail d’indicateurs doit atteindre le dernier indicateur avec la flèche droite ou Fin et revenir au premier avec la flèche gauche ou Début.
+
+Consigner le commit testé, l’organisation et le rôle utilisés, ainsi que les résultats. Confirmer **E2E FINAL #1229 BON** après réussite de la recette sur le commit proposé.
+
+### Mobile Money — registre des dépôts et retraits
+
+Sur 58 opérations admissibles, deux devises et deux boutiques, filtrer par type, statut, dates et référence. Comparer les cinq montants exacts par devise/type/statut et les trois périmètres de total ; changer de page et exporter CSV, XLSX et PDF. Vérifier le téléphone masqué, les montants négatifs, la séparation des conversions FX (aperçu distinct) et la lecture interdite pour une autre organisation ou une boutique non autorisée. Le registre FX complet et le solde à date ne sont pas validés par ce scénario.
+
+### Mobile Money — conversions de devises
+
+Avec 57 conversions autorisées, deux paires inverses et une conversion contrepassée, comparer les trois périmètres des montants source et cible sur plusieurs pages et dans les trois exports. Le taux historique, son jour, le statut métier et l’état du posting d’origine doivent rester distincts. Vérifier qu’un opérateur d’une seule boutique ne reçoit pas une conversion dont l’un des wallets est hors boutique ou partagé sans affectation. Tester la reprise comptable idempotente d’une opération confirmée en attente ; aucun nouveau mouvement wallet ne doit être créé. La validation des soldes à date et des droits de toutes les mutations reste indépendante.
+
+### Mobile Money — indicateurs et confidentialité du tableau de bord
+
+Pour une période contenant des dépôts, retraits, contrepassations et opérations d'une autre boutique, comparer les totaux des opérations confirmées du tableau de bord aux résultats du registre avec les mêmes dates. Tester un acteur affecté à une boutique, un acteur sans périmètre autorisé et un administrateur. Vérifier le masquage des numéros courts et l'absence des opérations d'une autre entreprise. Les comptes et soldes de configuration ainsi que les mutations nécessitent leurs propres contrôles.
+
+### Mobile Money FX — accès directs
+
+Avec des wallets CDF/USD dans deux boutiques et un wallet partagé sans affectation, essayer prévisualisation, création, rejeu de la même clé, reprise comptable et contrepassation par API directe. Un lecteur sans COLLECT_PAYMENT ne doit pas obtenir de mutation, un gestionnaire limité à une boutique ne doit pas agir sur un wallet hors périmètre, même si le transfert existe déjà. Les droits de module restent obligatoires et l'administrateur global ne peut accéder au tenant voisin. Vérifier l'absence de mouvement et de changement de révision après refus. La recette doit aussi couvrir la révocation d'une affectation et le diagnostic de reprise ; aucun nouveau test navigateur exécuté dans cette tranche.
+
+### Mobile Money — soldes et configuration par boutique
+
+Comparer la configuration wallet et le tableau de bord entre un gestionnaire global et un collaborateur limité à une boutique. Les soldes des wallets et caisses d'une autre boutique et les wallets sans affectation ne doivent pas apparaître ; le bouton de mapping est absent pour le gestionnaire limité et son POST direct doit être refusé. Vérifier les six décimales, la révocation d'accès et la non-divulgation interentreprises. La configuration globale reste gérable par les personnes autorisées ; un mapping unique ne devient pas un mapping par boutique. Tester séparément les opérations de caisse ordinaires utilisant un float mutualisé.
+
+### Mobile Money — float mutualisé utilisable sans consultation du solde
+
+Configurer un wallet CDF mutualisé, une caisse CDF affectée à chaque boutique et un wallet USD réservé à une autre boutique. Vérifier que le caissier autorisé peut choisir l'opérateur CDF sans voir le nom, l'identifiant ou le solde du wallet dans la configuration ; l'API ne permet pas de choisir arbitrairement un autre wallet. Vérifier le refus d'une caisse ou d'un float affecté hors périmètre, y compris par rejeu et contrepassation, et l'absence du solde dans une erreur d'insuffisance. Les tests d'autorisation en base utilisent des droits simulés ; le parcours connecté avant soumission opérateur reste à certifier.
+
+Avec un adaptateur de recette, répéter en mode connecté. Pour une caisse hors boutique, une session fermée ou des fonds insuffisants, vérifier le refus et l’absence de demande chez l’opérateur. Envoyer ensuite un dépôt admissible, fermer la session et rejouer la même référence pour retrouver le statut en attente. Changer le montant, essayer depuis un autre caissier et retirer l’affectation boutique avant un nouveau rejeu. Chaque refus doit laisser le nombre d’appels fournisseur et les mouvements de trésorerie inchangés.
+
+### Mobile Money — contrepassations de caisse et de change
+
+Avec une caisse ouverte, confirmer un dépôt puis un change pendant une période comptable ouverte. Fermer la période de recette et vérifier qu’une contrepassation de chaque opération renvoie un refus. Comparer les statuts, révisions, soldes et écritures avant et après les deux refus. Rouvrir la période, contrepasser avec les mêmes révisions et vérifier les mouvements inverses et l’équilibre des écritures. Rejouer chaque contrepassation et vérifier que les écritures et mouvements restent uniques.
+
+Pour une conversion confirmée historiquement sans journal, cliquer sur **Finaliser la comptabilisation** pendant une période fermée. Vérifier le diagnostic de période et l’absence d’écriture. Rouvrir la période puis réessayer deux fois. Vérifier qu’une seule écriture équilibrée existe et que ni les mouvements ni les soldes des wallets n’ont varié.
+
+### Mobile Money — reprise d’une confirmation fournisseur
+
+Avec un adaptateur de recette, obtenir une confirmation alors que la période comptable est fermée. Vérifier le statut 202 et le message « enregistrement en attente », le maintien de la référence fournisseur et l’absence de mouvement et d’écriture. Rouvrir la période et utiliser le rapprochement de la demande existante. Vérifier que le journal et les mouvements portent une seule fois sur la même opération et que la reprise conserve sa date de confirmation sans nouvel appel fournisseur.
+
+### Trésorerie — solde d’un compte à date
+
+Ouvrir **Trésorerie → Historique** et sélectionner un compte ou un wallet et une date de fin. Comparer le solde de la date passée avec le solde d’ouverture et les mouvements antérieurs à minuit dans le fuseau de l’entreprise. Inclure une opération ensuite contrepassée et vérifier son effet avant puis après la contrepassation. Changer le statut, la recherche et la page et vérifier que le solde du compte à la date reste identique. Comparer l’écran et les synthèses CSV, Excel et PDF. Vérifier qu’une date avant l’ouverture ou après aujourd’hui, ainsi qu’un historique impossible à rapprocher du solde courant, produisent un état explicite sans montant.
+
+### Facturation médicale — registre et exports
+
+Dans une clinique de recette, préparer au moins 51 factures en CDF et USD, dont des factures de même date, de statuts différents et une facture hors période. Rechercher successivement un numéro de facture, un patient et son numéro. Filtrer par statut et dates, puis changer de page. Le sous-total filtré reste stable et le total de la page évolue. Comparer les trois montants par devise dans l’écran et les exports CSV, Excel et PDF. Vérifier qu’aucun nom, numéro de patient ou note interne ne figure dans le rapport, et qu’un lecteur dépourvu du droit d’export ne peut pas appeler l’extraction. Répéter depuis une autre organisation.
+
+### Budgets — scénarios et versions
+
+Préparer des budgets de base sur deux pages, une révision de version 2, un autre scénario et deux devises. Ajouter une dépense approuvée et un engagement partiellement libéré à deux lignes distinctes. Rechercher les budgets de base. Vérifier que les totaux filtrés sont stables au changement de page, que le sous-total de la page évolue et que les deux versions sont lisibles séparément. Comparer l’écran, la fiche budget et les exports. Ajouter un budget sans prévision dans un groupe et vérifier que ce groupe ne présente plus de total de prévision.

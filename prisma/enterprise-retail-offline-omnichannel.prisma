@@ -167,7 +167,7 @@ model EnterpriseRetailOmnichannelReturnLine {
   organizationId      String
   returnId            String
   salesOrderItemId    String
-  quantity            Decimal  @db.Decimal(18, 3)
+  quantity            Decimal  @db.Decimal(21, 6)
   refundAmount        Decimal  @db.Decimal(20, 6)
   stockDisposition    String
   productCondition    String

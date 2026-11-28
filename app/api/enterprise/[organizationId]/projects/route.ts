@@ -2,7 +2,9 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
+import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import type { MonetaryTotal } from "@/lib/enterprise/common/analytics";
 import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { enterpriseDomainErrorResponse, enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
 import { createEnterpriseProject } from "@/lib/enterprise/projects-assets/projects";
@@ -12,6 +14,30 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 type Params = { params: Promise<{ organizationId: string }> };
+const openHighRisk = { status: "OPEN", severity: { in: ["HIGH", "CRITICAL"] } };
+const activeProjects = ["ACTIVE", "IN_PROGRESS"];
+const finishedProjects = ["COMPLETED", "CLOSED", "CANCELLED"];
+
+async function projectMetrics(tx: Prisma.TransactionClient, organizationId: string, where: Prisma.EnterpriseProjectWhereInput, today: Date) {
+  const [active, overdue, highRisks] = await Promise.all([
+    tx.enterpriseProject.count({ where: { AND: [where, { status: { in: activeProjects } }] } }),
+    tx.enterpriseProject.count({ where: { AND: [where, { targetEndDate: { lt: today }, status: { notIn: finishedProjects } }] } }),
+    tx.enterpriseProjectRisk.count({ where: { organizationId, ...openHighRisk, project: where } }),
+  ]);
+  return { active, overdue, highRisks };
+}
+
+async function projectBudgetTotals(tx: Prisma.TransactionClient, where: Prisma.EnterpriseProjectWhereInput): Promise<MonetaryTotal[]> {
+  const groups = await tx.enterpriseProject.groupBy({
+    by: ["currency", "status"],
+    where: { AND: [where, { indicativeBudget: { not: null }, currency: { not: null } }] },
+    orderBy: [{ currency: "asc" }, { status: "asc" }],
+    _sum: { indicativeBudget: true },
+  });
+  return groups.flatMap(({ currency, status, _sum }) => currency && /^[A-Z]{3}$/.test(currency) && _sum.indicativeBudget !== null
+    ? [{ currencyCode: currency, status, metric: "projectIndicativeBudget", amount: _sum.indicativeBudget.toFixed() }]
+    : []);
+}
 
 export async function GET(req: Request, { params }: Params) {
   const startedAt = Date.now();
@@ -25,55 +51,66 @@ export async function GET(req: Request, { params }: Params) {
     getEnterpriseCommonDomainAccess({ session, organizationId, moduleCode: "PROJECTS_SERVICES", action: "manage" }),
   ]);
   const url = new URL(req.url);
-  const page = Math.max(1, Number(url.searchParams.get("page") || 1) || 1);
-  const pageSize = Math.min(100, Math.max(5, Number(url.searchParams.get("pageSize") || 25) || 25));
+  const page = Math.max(1, Math.min(10000, Math.trunc(Number(url.searchParams.get("page"))) || 1));
+  const pageSize = Math.min(100, Math.max(5, Math.trunc(Number(url.searchParams.get("pageSize"))) || 25));
   const search = url.searchParams.get("search")?.trim() || "";
   const status = url.searchParams.get("status")?.trim() || "";
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
+  const generalWhere = { organizationId, archivedAt: null };
   const where: Prisma.EnterpriseProjectWhereInput = {
-    organizationId,
-    archivedAt: null,
+    ...generalWhere,
     ...((dates.from || dates.to) ? { createdAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(status ? { status } : {}),
     ...(search ? { OR: [{ reference: { contains: search, mode: "insensitive" } }, { name: { contains: search, mode: "insensitive" } }] } : {}),
   };
-  const [rawItems, total, active, overdue, risks] = await Promise.all([
-    prisma.enterpriseProject.findMany({
-      where,
-      orderBy: [{ status: "asc" }, { targetEndDate: "asc" }, { updatedAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: { _count: { select: { members: true, milestones: true, deliverables: true, risks: true, issues: true } } },
-    }),
-    prisma.enterpriseProject.count({ where }),
-    prisma.enterpriseProject.count({ where: { organizationId, archivedAt: null, status: { in: ["ACTIVE", "IN_PROGRESS"] } } }),
-    prisma.enterpriseProject.count({ where: { organizationId, archivedAt: null, targetEndDate: { lt: new Date() }, status: { notIn: ["COMPLETED", "CLOSED", "CANCELLED"] } } }),
-    prisma.enterpriseProjectRisk.count({ where: { organizationId, status: "OPEN", severity: { in: ["HIGH", "CRITICAL"] } } }),
-  ]);
-  const projectIds = rawItems.map((item) => item.id);
-  const acceptedByProject = projectIds.length
-    ? await prisma.enterpriseProjectDeliverable.groupBy({
+  const filtered = Boolean(dates.from || dates.to || status || search);
+  const result = await prisma.$transaction(async (tx) => {
+    const today = new Date(`${await resolveEnterpriseBusinessDate(tx, organizationId)}T00:00:00.000Z`);
+    const [rawItems, total, metrics, filteredTotals, generalMetrics, generalTotals] = await Promise.all([
+      tx.enterpriseProject.findMany({
+        where,
+        orderBy: [{ status: "asc" }, { targetEndDate: "asc" }, { updatedAt: "desc" }, { id: "asc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: { _count: { select: { members: true, milestones: true, deliverables: true, risks: true, issues: true } } },
+      }),
+      tx.enterpriseProject.count({ where }),
+      projectMetrics(tx, organizationId, where, today),
+      projectBudgetTotals(tx, where),
+      filtered ? projectMetrics(tx, organizationId, generalWhere, today) : null,
+      filtered ? projectBudgetTotals(tx, generalWhere) : null,
+    ]);
+    const projectIds = rawItems.map((item) => item.id);
+    const pageWhere = { ...generalWhere, id: { in: projectIds } };
+    const [acceptedByProject, pageMetrics, pageTotals] = projectIds.length ? await Promise.all([
+      tx.enterpriseProjectDeliverable.groupBy({
         by: ["projectId"],
         where: { organizationId, projectId: { in: projectIds }, status: "ACCEPTED" },
         _count: { _all: true },
-      })
-    : [];
-  const acceptedMap = new Map(acceptedByProject.map((item) => [item.projectId, item._count._all]));
-  const items = rawItems.map((item) => ({
-    ...item,
-    progressPercent: item._count.deliverables > 0
-      ? Math.round(((acceptedMap.get(item.id) || 0) / item._count.deliverables) * 100)
-      : item.progressPercent,
-  }));
+      }),
+      projectMetrics(tx, organizationId, pageWhere, today),
+      projectBudgetTotals(tx, pageWhere),
+    ]) : [[], { active: 0, overdue: 0, highRisks: 0 }, []] as const;
+    const acceptedMap = new Map(acceptedByProject.map((item) => [item.projectId, item._count._all]));
+    const items = rawItems.map((item) => ({
+      ...item,
+      progressPercent: item._count.deliverables > 0
+        ? Math.round(((acceptedMap.get(item.id) || 0) / item._count.deliverables) * 100)
+        : item.progressPercent,
+    }));
+    return {
+      items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+      metrics, generalMetrics: generalMetrics ?? metrics, pageMetrics,
+      filteredTotals, generalTotals: generalTotals ?? filteredTotals, pageTotals,
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "projects", page } });
   return NextResponse.json({
-    items,
-    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
-    metrics: { active, overdue, highRisks: risks },
+    ...result,
     canWrite: Boolean(writeAccess),
     canManage: Boolean(manageAccess),
-  });
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {

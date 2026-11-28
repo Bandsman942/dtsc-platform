@@ -1,3 +1,4 @@
+import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { Prisma } from "@prisma/client";
 import { readInvoiceLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
 
@@ -17,6 +18,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
     organizationId: string;
     inventoryItemIds: string[];
     warehouseId?: string;
+    warehouseIds?: string[];
     excludeSalesInvoiceId?: string;
   },
 ) {
@@ -26,7 +28,7 @@ export async function readActiveRetailInvoiceStockHoldsTx(
       organizationId: input.organizationId,
       inventoryItemId: { in: input.inventoryItemIds },
       checkout: {
-        ...(input.warehouseId ? { warehouseId: input.warehouseId } : {}),
+        ...(input.warehouseId ? { warehouseId: input.warehouseId } : input.warehouseIds ? { warehouseId: { in: input.warehouseIds } } : {}),
         ...(input.excludeSalesInvoiceId ? { salesInvoiceId: { not: input.excludeSalesInvoiceId } } : {}),
         stockPostedAt: null,
         invoice: { status: { notIn: ["CANCELLED", "VOIDED"] } },
@@ -42,10 +44,10 @@ export async function readActiveRetailInvoiceStockHoldsTx(
     },
   });
   return lines.flatMap((line) => {
-    const cancelled = (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), new Prisma.Decimal(0));
+    const cancelled = (line.returnLines || []).reduce((total, entry) => total.plus(entry.quantity), exactInventoryQuantity(0));
     // Preserve the prior zero-floor behavior for historical single-lot lines;
     // a new malformed multi-lot promise must fail closed.
-    const bounded = line.lotAllocations == null ? decimalMax(new Prisma.Decimal(0), new Prisma.Decimal(line.invoiceItem.quantity).minus(cancelled)) : null;
+    const bounded = line.lotAllocations == null ? decimalMax(exactInventoryQuantity(0), exactInventoryQuantity(line.invoiceItem.quantity).minus(cancelled)) : null;
     const allocations = bounded ? (bounded.gt(0) ? [{ stockLotId: line.stockLotId, quantity: bounded }] : []) : readInvoiceLotAllocations(line, cancelled);
     return allocations.map((allocation) => ({ inventoryItemId: line.inventoryItemId!, stockLotId: allocation.stockLotId, warehouseId: line.checkout.warehouseId, quantity: allocation.quantity }));
   });

@@ -6,7 +6,8 @@ import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { normalizeEnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
 import { enterpriseBudgetVisibilityWhere, getEnterpriseFinanceAccess } from "@/lib/enterprise/finance/access";
 import { createEnterpriseBudget } from "@/lib/enterprise/finance/budget-service";
-import { getBudgetPosition } from "@/lib/enterprise/finance/commitments";
+import { budgetRegisterPageTotals, budgetRegisterTotals } from "@/lib/enterprise/finance/budget-register-analytics";
+import { getBudgetRegisterPositions } from "@/lib/enterprise/finance/commitments";
 import { enterpriseBudgetCreateSchema } from "@/lib/enterprise/finance/validators";
 import { prisma } from "@/lib/prisma";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
@@ -33,7 +34,8 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim();
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
-  const filters: Prisma.EnterpriseBudgetWhereInput[] = [enterpriseBudgetVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll })];
+  const visibility = enterpriseBudgetVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
+  const filters: Prisma.EnterpriseBudgetWhereInput[] = [visibility];
   if (status) filters.push({ status });
   if (currency) filters.push({ currency });
   if (departmentId) filters.push({ departmentId });
@@ -44,33 +46,46 @@ export async function GET(req: Request, { params }: Params) {
   if (dates.to) filters.push({ periodStart: { lte: dates.to } });
 
   const where: Prisma.EnterpriseBudgetWhereInput = { AND: filters };
-  const [budgets, total] = await Promise.all([
-    prisma.enterpriseBudget.findMany({ where, orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize }),
-    prisma.enterpriseBudget.count({ where }),
-  ]);
-  const items = await prisma.$transaction(async (tx) => Promise.all(budgets.map(async (budget) => {
-    const position = await getBudgetPosition(tx, organizationId, budget.id);
-    const canOwn = access.canManage || budget.createdByUserId === session.userId;
-    return {
-      ...budget,
-      plannedAmount: position.planned,
-      committedAmount: position.committedRemaining,
-      actualAmount: position.actual,
-      availableAmount: position.available,
-      lineCount: position.lines.length,
-      capabilities: {
-        canSubmit: access.canSubmit && canOwn && budget.status === "DRAFT",
-        canCancel: access.canSubmit && canOwn && budget.status === "DRAFT",
-        canReopen: access.canSubmit && canOwn && ["REJECTED", "CORRECTION_REQUESTED"].includes(budget.status),
-        canFreeze: access.canManage && budget.status === "ACTIVE",
-        canCreateRevision: access.canManage && ["ACTIVE", "FROZEN", "CLOSED"].includes(budget.status),
-        canClose: access.canManage && ["ACTIVE", "FROZEN"].includes(budget.status),
-      },
-    };
-  })));
-  const currencies = await prisma.enterpriseBudget.findMany({ where: enterpriseBudgetVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll }), distinct: ["currency"], select: { currency: true }, orderBy: { currency: "asc" }, take: 50 });
+  const { items, total, currencies, ...totals } = await prisma.$transaction(async (tx) => {
+    const [budgets, total, currencies] = await Promise.all([
+      tx.enterpriseBudget.findMany({
+        where,
+        orderBy: [{ periodStart: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      tx.enterpriseBudget.count({ where }),
+      tx.enterpriseBudget.findMany({
+        where: visibility, distinct: ["currency"], select: { currency: true }, orderBy: { currency: "asc" }, take: 50,
+      }),
+    ]);
+    const positions = await getBudgetRegisterPositions(tx, organizationId, budgets.map(budget => budget.id));
+    const generalTotals = await budgetRegisterTotals(tx, organizationId, visibility);
+    const filteredTotals = filters.length === 1 ? generalTotals : await budgetRegisterTotals(tx, organizationId, where);
+    const items = budgets.map((budget) => {
+      const position = positions.get(budget.id)!;
+      const canOwn = access.canManage || budget.createdByUserId === session.userId;
+      return {
+        ...budget,
+        plannedAmount: position.planned,
+        committedAmount: position.committedRemaining,
+        actualAmount: position.actual,
+        availableAmount: position.available,
+        lineCount: position.lineCount,
+        capabilities: {
+          canSubmit: access.canSubmit && canOwn && budget.status === "DRAFT",
+          canCancel: access.canSubmit && canOwn && budget.status === "DRAFT",
+          canReopen: access.canSubmit && canOwn && ["REJECTED", "CORRECTION_REQUESTED"].includes(budget.status),
+          canFreeze: access.canManage && budget.status === "ACTIVE",
+          canCreateRevision: access.canManage && ["ACTIVE", "FROZEN", "CLOSED"].includes(budget.status),
+          canClose: access.canManage && ["ACTIVE", "FROZEN"].includes(budget.status),
+        },
+      };
+    });
+    return { items, total, currencies, generalTotals, filteredTotals, pageTotals: budgetRegisterPageTotals(budgets, positions) };
+  }, { isolationLevel: "RepeatableRead", timeout: 15000 });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "budgets", page, pageSize } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, currencies: currencies.map((item) => item.currency), canManage: access.canManage, canCreate: access.canCreate });
+  return NextResponse.json({ items, ...totals, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, currencies: currencies.map((item) => item.currency), canManage: access.canManage, canCreate: access.canCreate });
 }
 
 export async function POST(req: Request, { params }: Params) {

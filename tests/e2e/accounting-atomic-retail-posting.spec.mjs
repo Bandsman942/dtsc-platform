@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { Prisma, PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -338,7 +339,7 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     await prisma.$disconnect();
   });
 
-  test("manual Mobile Money, FX and Telco commit once with GL and a closed period rolls everything back", async ({ page }) => {
+  test("manual Mobile Money, FX and Telco commit once with GL and a closed period rolls back creation and reversals", async ({ page }) => {
     await signIn(page, "MOBILE_MONEY_AGENCY");
     await ensureOpenTill(page);
 
@@ -468,6 +469,22 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     };
     const rollbackCashBefore = await accountBalance(fixture.cashAccountId);
     const rollbackFloatBefore = await accountBalance(fixture.mobileUsdAccountId);
+    const rollbackCdfBefore = await accountBalance(fixture.mobileCdfAccountId);
+    const mobileReversePath = `/api/enterprise/${organizationId}/retail/mobile-money/${mobileId}/reverse`;
+    const fxReversePath = `/api/enterprise/${organizationId}/retail/mobile-money/fx/${fxId}/reverse`;
+    const mobileReversePayload = { revision: mobile.body.transaction.revision, reason: "Annulation de recette Mobile Money" };
+    const fxReversePayload = { revision: fx.body.transfer.revision, reason: "Annulation de recette du change" };
+    // Simulate a confirmed legacy record that predates atomic FX posting.
+    const { id, number, idempotencyKey, ...fxRecord } = await prisma.enterpriseMobileMoneyFxTransfer.findUniqueOrThrow({ where: { id: fxId } });
+    const legacyReference = `E2E-1229-FX-PENDING-${stamp}`;
+    const legacy = await prisma.enterpriseMobileMoneyFxTransfer.create({
+      data: { ...fxRecord, number: legacyReference, idempotencyKey: legacyReference },
+    });
+    const legacySource = { organizationId, sourceEntityType: "EnterpriseMobileMoneyFxTransfer", sourceEntityId: legacy.id };
+    const fxAccountingPath = `/api/enterprise/${organizationId}/retail/mobile-money/fx/${legacy.id}/accounting`;
+    const fxMovementsBefore = await prisma.enterpriseTreasuryTransaction.count({
+      where: { organizationId, financialAccountId: { in: [fixture.mobileCdfAccountId, fixture.mobileUsdAccountId] } },
+    });
 
     try {
       await prisma.enterpriseFiscalPeriod.update({
@@ -488,11 +505,106 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       expect(await prisma.enterprisePostingBatch.count({ where: { organizationId, sourceEntityType: "EnterpriseMobileMoneyTransaction", sourceEntityId: { startsWith: "e2e-602-rollback" } } })).toBe(0);
       expect(await accountBalance(fixture.cashAccountId)).toBeCloseTo(rollbackCashBefore, 5);
       expect(await accountBalance(fixture.mobileUsdAccountId)).toBeCloseTo(rollbackFloatBefore, 5);
+
+      for (const [path, payload] of [[mobileReversePath, mobileReversePayload], [fxReversePath, fxReversePayload]]) {
+        const failedReversal = await browserPost(page, path, payload);
+        expect(failedReversal.status, JSON.stringify(failedReversal.body)).toBe(409);
+        expect(failedReversal.body?.error).toMatch(/PERIOD.*(CLOSED|LOCKED|REQUIRED)/);
+      }
+      const mobileAfterRefusal = await prisma.enterpriseMobileMoneyTransaction.findUniqueOrThrow({ where: { id: mobileId } });
+      const fxAfterRefusal = await prisma.enterpriseMobileMoneyFxTransfer.findUniqueOrThrow({ where: { id: fxId } });
+      expect(mobileAfterRefusal).toMatchObject({ status: "CONFIRMED", revision: mobileReversePayload.revision });
+      expect(fxAfterRefusal).toMatchObject({ status: "CONFIRMED", revision: fxReversePayload.revision });
+      expect(await accountBalance(fixture.cashAccountId)).toBe(rollbackCashBefore);
+      expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore);
+      expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore);
+      const pending = await browserPost(page, fxAccountingPath, {});
+      expect(pending.status, JSON.stringify(pending.body)).toBe(202);
+      expect(pending.body).toMatchObject({ outcome: "PENDING", messageCode: "RETAIL_ACCOUNTING_PENDING_PERIOD_CLOSED", accounting: { status: "PENDING" } });
+      expect(await prisma.enterpriseJournalEntry.count({ where: legacySource })).toBe(0);
+      expect(await prisma.enterprisePostingBatch.findFirstOrThrow({ where: legacySource })).toMatchObject({
+        status: "FAILED", errorCode: pending.body.accounting.blockerCode,
+      });
     } finally {
       await prisma.enterpriseFiscalPeriod.update({
         where: { id: period.id },
         data: periodSnapshot,
       });
+    }
+
+    const posted = await browserPost(page, fxAccountingPath, {});
+    expect(posted.status, JSON.stringify(posted.body)).toBe(200);
+    expect(posted.body.accounting).toMatchObject({ status: "POSTED", idempotent: false });
+    const recoveredEntry = await postedEntry(legacySource.sourceEntityType, legacy.id);
+    expect(recoveredEntry?.id).toBe(posted.body.accounting.journalEntryId);
+    expectBalanced(recoveredEntry, "Legacy Mobile Money FX recovery");
+    const replayedPosting = await browserPost(page, fxAccountingPath, {});
+    expect(replayedPosting.status, JSON.stringify(replayedPosting.body)).toBe(200);
+    expect(replayedPosting.body.accounting).toEqual({ ...posted.body.accounting, idempotent: true });
+    expect(await prisma.enterpriseJournalEntry.count({ where: legacySource })).toBe(1);
+    expect(await prisma.enterprisePostingBatch.findFirstOrThrow({ where: legacySource })).toMatchObject({ status: "COMPLETED", errorCode: null });
+    expect(await prisma.enterpriseTreasuryTransaction.count({
+      where: { organizationId, financialAccountId: { in: [fixture.mobileCdfAccountId, fixture.mobileUsdAccountId] } },
+    })).toBe(fxMovementsBefore);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore);
+    expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore);
+
+    for (const [path, payload, sourceEntityType, sourceEntityId, responseKey] of [
+      [mobileReversePath, mobileReversePayload, "EnterpriseMobileMoneyTransaction", mobileId, "transaction"],
+      [fxReversePath, fxReversePayload, "EnterpriseMobileMoneyFxTransfer", fxId, "transfer"],
+    ]) {
+      const reversed = await browserPost(page, path, payload);
+      expect(reversed.status, JSON.stringify(reversed.body)).toBe(200);
+      expect(reversed.body[responseKey]).toMatchObject({ status: "REVERSED", revision: payload.revision + 1 });
+      expect(reversed.body.accounting.idempotent).toBe(false);
+      const reversalEntryId = reversed.body.accounting.journalEntryId;
+      const entry = await prisma.enterpriseJournalEntry.findUniqueOrThrow({ where: { id: reversalEntryId }, include: { lines: true } });
+      expectBalanced(entry, sourceEntityType + " reversal");
+      const replay = await browserPost(page, path, payload);
+      expect(replay.status, JSON.stringify(replay.body)).toBe(200);
+      expect(replay.body[responseKey].revision).toBe(payload.revision + 1);
+      expect(replay.body.accounting).toEqual({ idempotent: true, journalEntryId: reversalEntryId });
+      expect(await prisma.enterpriseJournalEntry.count({ where: { organizationId, sourceEntityType, sourceEntityId } })).toBe(2);
+    }
+    expect(await accountBalance(fixture.cashAccountId)).toBe(rollbackCashBefore - 10);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore + 20);
+    expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore - 28_000);
+  });
+
+  test("Telco history shows and exports exact amounts across filtered pages", async ({ page }) => {
+    const key = `TELCO-1229-${Date.now()}`;
+    const ids = Array.from({ length: 35 }, (_, index) => `${key}-${String(index).padStart(2, "0")}`);
+    const amount = "99999999999999.999999";
+    await prisma.enterpriseTelcoTopup.createMany({ data: ids.map(id => ({
+      id, number: id, idempotencyKey: id, organizationId, providerCode: "AFRICELL", offerLabel: "Recharge de test",
+      destinationPhone: "243811234567", currencyCode: "USD", saleAmount: amount, operatorCost: "99999999999999.999998",
+      marginAmount: "0.000001", tenderFinancialAccountId: fixture.bankAccountId, operatorFloatAccountId: fixture.telcoUsdAccountId,
+      agentUserId: fixture.userId, status: "SUCCESS",
+    })) });
+    try {
+      await signIn(page, "TELCO_TOPUPS");
+      await page.getByRole("button", { name: /^(Historique|History)$/ }).click();
+      const history = page.locator("[data-telco-history-design2]");
+      const query = page.waitForResponse(response => response.url().includes("telco-topups?") && new URL(response.url()).searchParams.get("search") === key);
+      await history.getByRole("textbox").fill(key);
+      const result = await (await query).json();
+      expect(result.pagination).toEqual({ page: 1, pageSize: 30, total: 35, pageCount: 2 });
+      expect(result.filteredTotals).toContainEqual({ currencyCode: "USD", status: "SUCCESS", metric: "telcoSale", amount: "3499999999999999.999965" });
+      const amounts = history.locator("[data-commercial-amount-scopes]");
+      await expect(amounts).toContainText(/3\D499\D999\D999\D999\D999[,.]999965/);
+      await history.getByRole("button", { name: /^(Suivant|Next)$/ }).click();
+      await expect(history.getByText("Page 2 / 2")).toBeVisible();
+      await expect(amounts).toContainText(/3\D499\D999\D999\D999\D999[,.]999965/);
+      await expect(history.getByText(/2438••••567/).first()).toBeVisible();
+      const download = page.waitForEvent("download");
+      await history.getByRole("button", { name: "CSV", exact: true }).click();
+      const csv = await readFile(await (await download).path(), "utf8");
+      const records = csv.split(/\r?\n/).filter(row => row.includes(`${key}-`));
+      expect(records).toHaveLength(35);
+      expect(records.every(row => row.includes(amount) && row.includes("2438••••567"))).toBe(true);
+      expect(csv).not.toContain("243811234567");
+    } finally {
+      await prisma.enterpriseTelcoTopup.deleteMany({ where: { organizationId, id: { in: ids } } });
     }
   });
 });

@@ -4,6 +4,8 @@ import { getSession } from "@/lib/auth";
 import { getManufacturingAccess } from "@/lib/enterprise/manufacturing/access";
 import type { ManufacturingModuleCode } from "@/lib/enterprise/manufacturing/constants";
 import { ManufacturingDomainError } from "@/lib/enterprise/manufacturing/errors";
+import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
+import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
@@ -42,6 +44,7 @@ export async function authorizeManufacturingRequest({
 }
 
 export function manufacturingErrorResponse(error: unknown, fallbackCode = "MANUFACTURING_OPERATION_FAILED") {
+  if (error instanceof EnterpriseDomainError) return enterpriseDomainErrorResponse(error, fallbackCode);
   if (error instanceof ManufacturingDomainError) {
     return NextResponse.json({ error: error.code, message: error.message }, { status: error.statusCode });
   }

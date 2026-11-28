@@ -151,7 +151,7 @@ model EnterpriseRetailInvoiceReturnLine {
   returnRequestId  String
   checkoutId       String
   checkoutLineId   String
-  quantity         Decimal @db.Decimal(20, 6)
+  quantity         Decimal @db.Decimal(21, 6)
   refundAmount     Decimal @db.Decimal(20, 6)
   refundNetAmount  Decimal? @db.Decimal(20, 6)
   refundTaxAmount  Decimal? @db.Decimal(20, 6)

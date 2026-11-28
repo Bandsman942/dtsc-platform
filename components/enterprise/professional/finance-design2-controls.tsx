@@ -3,9 +3,21 @@
 import { useEffect, useState } from "react";
 import { CalendarDays, Download, FileSpreadsheet, FileText } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { ModuleMetric, ModuleMetrics } from "@/components/workspace/module-metrics";
+import { financeStatusLabel } from "@/components/enterprise/professional/finance-professional-ui";
+import { professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
+import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
+import { customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
+
+import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
+import { inventoryQuantityMetricLabel, inventoryQuantityExportValue } from "@/lib/enterprise/inventory/quantity-display";
+import type { MonetaryScopes, MonetaryTotal } from "@/lib/enterprise/common/analytics";
+import type { TreasuryBalanceAt } from "@/lib/enterprise/accounting/treasury-balance-at";
+import { translateEnterpriseTreasury, type EnterpriseTreasuryCopyKey } from "@/lib/i18n/enterprise-treasury";
 
 type Locale = "fr" | "en";
 type DateMode = "all" | "today" | "week" | "month" | "exact" | "range";
@@ -16,25 +28,26 @@ function localToday() {
 }
 
 /** Calendar dates are business days, never UTC instants on the client. */
-export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }: {
+export function FinanceDateFilter({ locale, from, to, onChange, disabledReason, businessDate }: {
   locale: Locale;
   from: string;
   to: string;
   onChange: (from: string, to: string) => void;
   disabledReason?: string;
+  businessDate?: string;
 }) {
   const [mode, setMode] = useState<DateMode>(from && from === to ? "exact" : from || to ? "range" : "all");
   useEffect(() => { if (!from && !to) setMode("all"); }, [from, to]);
   const en = locale === "en";
   function choose(next: DateMode) {
     setMode(next);
-    const today = localToday();
+    const today = businessDate || localToday();
     if (next === "all") onChange("", "");
     if (next === "today" || next === "exact") onChange(today, today);
     if (next === "week") {
-      const date = new Date(`${today}T12:00:00`);
-      date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-      const start = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const date = new Date(`${today}T00:00:00.000Z`);
+      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+      const start = formatEnterpriseBusinessDate(date, "UTC");
       onChange(start, today);
     }
     if (next === "month") onChange(`${today.slice(0, 7)}-01`, today);
@@ -62,10 +75,118 @@ export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }
   </div>;
 }
 
+export type FinanceFilteredTotal = MonetaryTotal;
+const filteredMetricLabels = {
+  debit: { fr: "Total débit", en: "Total debit" },
+  credit: { fr: "Total crédit", en: "Total credit" },
+  invoiceTotal: { fr: "Total des factures", en: "Invoice total" },
+  paid: { fr: "Montants réglés", en: "Paid amounts" },
+  credited: { fr: "Montants crédités", en: "Credited amounts" },
+  creditTotal: { fr: "Total des avoirs", en: "Credit note total" },
+  tax: { fr: "Taxes", en: "Taxes" },
+  subtotal: { fr: "Sous-total HT", en: "Subtotal before tax" },
+  discount: { fr: "Remises", en: "Discounts" },
+  total: { fr: "Total des pièces", en: "Document total" },
+  original: { fr: "Montant initial", en: "Original amount" },
+  outstanding: { fr: "Solde restant dû", en: "Outstanding balance" },
+  inbound: { fr: "Montants entrants", en: "Inbound amounts" },
+  outbound: { fr: "Montants sortants", en: "Outbound amounts" },
+  payrollGross: { fr: "Total brut", en: "Gross total" },
+  payrollBonuses: { fr: "Primes", en: "Bonuses" },
+  payrollDeductions: { fr: "Retenues", en: "Deductions" },
+  payrollNet: { fr: "Total net", en: "Net total" },
+  projectIndicativeBudget: { fr: "Budget indicatif", en: "Indicative budget" },
+  cashClosingShortage: { fr: "Manquants constatés à la clôture", en: "Recorded closing shortages" },
+  cashClosingSurplus: { fr: "Excédents constatés à la clôture", en: "Recorded closing surpluses" },
+  telcoSale: { fr: "Montants de vente Télécom", en: "Telco sale amounts" },
+  telcoCost: { fr: "Coûts opérateur Télécom", en: "Telco operator costs" },
+  telcoMargin: { fr: "Marges Télécom", en: "Telco margins" },
+  mobileMoneyPrincipal: { fr: "Principal Mobile Money", en: "Mobile Money principal" },
+  mobileMoneyFee: { fr: "Frais clients", en: "Customer fees" },
+  mobileMoneyCommission: { fr: "Commissions opérateur", en: "Provider commissions" },
+  mobileMoneyCashEffect: { fr: "Effet caisse enregistré", en: "Recorded cash effect" },
+  mobileMoneyFloatEffect: { fr: "Effet float enregistré", en: "Recorded float effect" },
+  mobileMoneyFxSource: { fr: "Montant source converti", en: "Converted source amount" },
+  mobileMoneyFxTarget: { fr: "Montant cible enregistré", en: "Recorded target amount" },
+  budgetPlanned: { fr: "Planifié", en: "Planned" },
+  budgetCommitted: { fr: "Engagement restant", en: "Remaining commitment" },
+  budgetActual: { fr: "Réalisé", en: "Actual" },
+  budgetAvailable: { fr: "Disponible", en: "Available" },
+  budgetForecast: { fr: "Prévision", en: "Forecast" },
+  assetOriginalCost: { fr: "Coût d’acquisition", en: "Acquisition cost" },
+  assetDepreciation: { fr: "Amortissements comptabilisés", en: "Posted depreciation" },
+  assetNetBookValue: { fr: "Valeur nette comptable", en: "Net book value" },
+} as const;
+function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale, statusLabel?: (status: string) => string) {
+  const status = row.status
+    ? (statusLabel ? statusLabel(row.status) : row.metric === "projectIndicativeBudget" ? professionalErpEnumLabel(locale, "projectStatus", row.status)
+      : row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status)
+        : (row.metric.startsWith("telco") || row.metric.startsWith("mobileMoney")) ? customerFacingStatusLabel(row.status, locale) : financeStatusLabel(row.status, locale))
+    : "";
+  const scenario = row.budgetScenario && statusLabel ? statusLabel(row.budgetScenario) : "";
+  const version = row.budgetVersion === undefined ? "" : `Version ${row.budgetVersion}`;
+  return [
+    filteredMetricLabels[row.metric][locale], row.operationType ? customerFacingMobileMoneyTransactionType(row.operationType, locale) : "",
+    row.currencyPair, status, scenario, version, row.currencyCode,
+  ].filter(Boolean).join(" · ");
+}
+
+export function formatAnalyticsAmount(row: Pick<FinanceFilteredTotal, "amount" | "currencyCode">, locale: Locale) {
+  const [whole, fraction = ""] = row.amount.split(".");
+  const precision = Math.max(2, fraction.length);
+  try {
+    const formatter = new Intl.NumberFormat(locale === "fr" ? "fr-FR" : "en-GB", {
+      style: "currency",
+      currency: row.currencyCode,
+      currencyDisplay: "code",
+      minimumFractionDigits: precision,
+      maximumFractionDigits: precision,
+    });
+    const integer = whole === "-0" ? -0 : BigInt(whole);
+    return formatter.formatToParts(integer).map((part) => part.type === "fraction" ? fraction.padEnd(precision, "0") : part.value).join("");
+  } catch {
+    return `${row.amount} ${row.currencyCode}`;
+  }
+}
+
+export function FinanceFilteredTotals({ rows, locale, scope = "filtered", statusLabel }: { rows: FinanceFilteredTotal[]; locale: Locale; statusLabel?: (status: string) => string; scope?: "filtered" | "general" | "page" }) {
+  if (!rows.length) return null;
+  const label = scope === "general" ? (locale === "fr" ? "Totaux généraux autorisés (sans filtres)" : "Authorized general totals (without filters)")
+    : scope === "page" ? (locale === "fr" ? "Sous-totaux de la page affichée" : "Displayed page subtotals")
+    : locale === "fr" ? "Sous-totaux filtrés (toutes pages)" : "Filtered subtotals (all pages)";
+  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.operationType,row.currencyPair,row.status,row.currencyCode,row.budgetScenario,row.budgetVersion].join(":")} label={filteredMetricLabel(row, locale, statusLabel)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
+}
+
+/** Keep all three scopes explicit; currencies and document statuses never mix. */
+export function FinanceAmountScopes({ totals, locale, statusLabel }: { totals: Partial<MonetaryScopes>; locale: Locale; statusLabel?: (status: string) => string }) {
+  return <div className="grid min-w-0 gap-3" data-commercial-amount-scopes>
+    {totals.filteredTotals?.length ? <FinanceFilteredTotals rows={totals.filteredTotals} locale={locale} statusLabel={statusLabel} /> : <p className="text-sm text-dtsc-muted">{locale === "fr" ? "Aucun montant dans le résultat filtré." : "No amounts in the filtered result."}</p>}
+    <details className="min-w-0 rounded-xl border border-dtsc-border p-3">
+      <summary className="cursor-pointer text-sm font-semibold text-dtsc-ink">{locale === "fr" ? "Comparer avec le général et la page" : "Compare general and page totals"}</summary>
+      <div className="mt-3 grid min-w-0 gap-3"><FinanceFilteredTotals rows={totals.generalTotals || []} locale={locale} statusLabel={statusLabel} scope="general" /><FinanceFilteredTotals rows={totals.pageTotals || []} locale={locale} statusLabel={statusLabel} scope="page" /></div>
+    </details>
+  </div>;
+}
+
+type AnalyticalExportTotals = { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{unitId:string;unit:string;value:string;precisionMismatch:boolean}>; quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[]; metrics?: { treasuryBalanceAt?: TreasuryBalanceAt; assetValuationUnavailableScopes?: string[] } };
+type PaginatedExportPayload = AnalyticalExportTotals & {items?:Record<string,unknown>[];pagination?:{pageCount?:number;total?:number};message?:string};
+
+export function treasuryBalanceAtKpi(balance: TreasuryBalanceAt, locale: Locale) {
+  const copy = (key: EnterpriseTreasuryCopyKey) => translateEnterpriseTreasury(locale, key);
+  const label = `${copy("historyBalanceAt")} ${balance.date} · ${balance.timezone}`;
+  const value = balance.amount !== null
+    ? formatAnalyticsAmount({ amount: balance.amount, currencyCode: balance.currencyCode }, locale)
+    : copy(balance.status === "BEFORE_ACCOUNT" ? "historyBalanceBeforeAccount" : balance.status === "FUTURE_DATE" ? "historyBalanceFuture" : "historyBalanceUnverified");
+  return { label, value };
+}
+function quantitySummaryKpis(rows:InventoryQuantityTotal[],locale:Locale,scope:"filtered"|"general") {
+  return rows.map(row=>{const numeric=inventoryQuantityExportValue(row.value);return {label:`${scope==="filtered"?(locale==="fr"?"Sous-total filtré":"Filtered subtotal"):(locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters")} · ${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`,value:`${row.value} ${row.unit}${row.precisionMismatch?(locale==="fr"?" · Précision à vérifier":" · Precision needs review"):""}`,numericValue:typeof numeric==="number"?numeric:undefined};});
+}
+
 export type FinanceExportColumn = { key: string; labelFr: string; labelEn: string; get: (row: Record<string, unknown>) => string | number };
 
 /** Downloads the FULL authorized, filtered result up to the safe export cap; never silently exports only the visible page. */
-export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, reportFilters, columns, disabled, subtitleFr, subtitleEn }: {
+export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, reportFilters, columns, disabled, subtitleFr, subtitleEn, statusLabel }: {
   endpoint: string;
   organizationName: string;
   title: string;
@@ -76,6 +197,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
   disabled?: boolean;
   subtitleFr?: string;
   subtitleEn?: string;
+  statusLabel?: (status: string) => string;
 }) {
   const [busy, setBusy] = useState<"CSV" | "Excel" | "PDF" | null>(null);
   const en = locale === "en";
@@ -86,38 +208,63 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
     try {
       const params = new URLSearchParams({ ...filters, page: "1", pageSize: "100" });
       const first = await fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${params}`, { cache: "no-store" });
-      const body = await first.json().catch(() => null) as { items?: Record<string, unknown>[]; pagination?: { pageCount?: number; total?: number }; message?: string } | null;
+      const body = await first.json().catch(() => null) as PaginatedExportPayload | null;
       if (!first.ok || !body || !Array.isArray(body.items)) throw new Error(body?.message || tr("L’export des données a échoué.", "Data export failed."));
       const total = body.pagination?.total ?? body.items.length;
       const pages = body.pagination?.pageCount ?? 1;
       // Some Finance APIs cap pageSize at 50; still retrieve every eligible row.
       if (total > 1000 || pages > 200) throw new Error(tr(`Le résultat contient ${total} lignes. Affinez les dates ou la recherche (limite de 1 000 lignes par export).`, `There are ${total} rows. Narrow the date or search filters (1,000 rows per export).`));
       const all = [...body.items];
+      const summarySignature = (value: AnalyticalExportTotals) => JSON.stringify([
+        ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.budgetScenario||"",row.budgetVersion??"",row.amount])),
+        ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.budgetScenario||"",row.budgetVersion??"",row.amount])),
+        ...(value.physicalTotals || []).map(row=>JSON.stringify(["physical",row.unitId,row.unit,row.value,row.precisionMismatch])),
+        ...(value.metrics?.treasuryBalanceAt ? [JSON.stringify(value.metrics.treasuryBalanceAt)] : []),
+        ...(value.metrics?.assetValuationUnavailableScopes || []).filter(scope => scope !== "pageTotals"),
+        ...(["quantityTotals","generalQuantityTotals"] as const).flatMap(scope=>(value[scope]||[]).map(row=>JSON.stringify([scope,row.metric,row.unitId,row.unit,row.decimalScale,row.value,row.precisionMismatch]))),
+      ].sort());
+      const firstSummary = summarySignature(body);
       for (let start = 2; start <= pages; start += 3) {
         const batch = await Promise.all(Array.from({ length: Math.min(3, pages - start + 1) }, (_, index) => {
           const query = new URLSearchParams(params);
           query.set("page", String(start + index));
           return fetch(`${endpoint}${endpoint.includes("?") ? "&" : "?"}${query}`, { cache: "no-store" }).then(async (response) => {
-            const result = await response.json().catch(() => null) as { items?: Record<string, unknown>[]; message?: string } | null;
+            const result = await response.json().catch(() => null) as PaginatedExportPayload | null;
             if (!response.ok || !Array.isArray(result?.items)) throw new Error(result?.message || tr("L’extraction a été interrompue.", "The export was interrupted."));
+            if ((result.pagination?.total ?? total) !== total || summarySignature(result) !== firstSummary) throw new Error(tr("Les données ont changé pendant l’export. Réessayez.", "Data changed during export. Retry."));
             return result.items;
           });
         }));
         all.push(...batch.flat());
       }
+      const ids = all.map(row => row.id).filter((id): id is string => typeof id === "string" && Boolean(id));
+      if (all.length !== total || new Set(ids).size !== ids.length) throw new Error(tr("Les données ont changé pendant l’export. Réessayez.", "Data changed during export. Retry."));
       // Date/status filters are validated and enforced by each module API, not a browser-only projection.
       const now = new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date());
+      const balance = body.metrics?.treasuryBalanceAt;
       const model: ProfessionalReportExportModel = {
         organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
-        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }],
+        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale, statusLabel)}`, value: formatAnalyticsAmount(row, locale) })) : []), ...(body.generalTotals || []).filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Total général autorisé sans filtres", "Authorized general total without filters")} · ${filteredMetricLabel(row, locale, statusLabel)}`, value: formatAnalyticsAmount(row, locale) })), ...quantitySummaryKpis(body.quantityTotals||[],locale,"filtered"), ...quantitySummaryKpis(body.generalQuantityTotals||[],locale,"general"), ...(body.quantityTotals ? [] : body.physicalTotals || []).map(row => ({ label: `${tr("Sous-total physique filtré", "Filtered on-hand subtotal")} · ${row.unit}`, value: `${row.value} ${row.unit}${row.precisionMismatch ? tr(" · Précision à vérifier", " · Precision needs review") : ""}` }))],
+        includeCompleteSummary: Boolean(body.filteredTotals?.length || body.generalTotals?.length || body.physicalTotals?.length || body.quantityTotals?.length || body.generalQuantityTotals?.length),
         chart: [], insights: [],
         filters: reportFilters ?? Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),
         columns: columns.map((column) => ({ key: column.key, label: en ? column.labelEn : column.labelFr })),
         rows: all.map((row) => Object.fromEntries(columns.map((column) => [column.key, column.get(row)]))),
         accentHex: "#087EA4",
       };
+      if (balance) {
+        model.kpis.push(treasuryBalanceAtKpi(balance, locale));
+        model.includeCompleteSummary = true;
+      }
+      if (body.metrics?.assetValuationUnavailableScopes?.some(scope => scope !== "pageTotals")) {
+        model.kpis.push({
+          label: tr("Vérification des immobilisations", "Asset valuation review"),
+          value: tr("Certains totaux nécessitent de vérifier les écritures liées.", "Some totals require review of the linked journal entries."),
+        });
+        model.includeCompleteSummary = true;
+      }
       if (format === "CSV") downloadProfessionalCsv(model);
       else if (format === "Excel") downloadProfessionalXlsx(model);
       else downloadProfessionalPdf(model);

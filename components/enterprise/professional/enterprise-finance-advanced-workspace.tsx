@@ -4,7 +4,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { CheckCircle2, Plus, RefreshCw, RotateCcw, Settings2, Send } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { FinanceAccountingReferenceSelect } from "@/components/enterprise/core-v2/finance-accounting-reference-select";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, formatAnalyticsAmount, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { FinanceTemplateImportControls } from "@/components/enterprise/professional/finance-template-import-controls";
 import { TaxCatalogPanel } from "@/components/enterprise/professional/tax-catalog-panel";
 import { TaxRulesPanel } from "@/components/enterprise/professional/tax-rules-panel";
@@ -15,7 +15,7 @@ import { FinancialStatementReportDialog } from "@/components/reports/financial-s
 import { ProfessionalError, ProfessionalHelp, ProfessionalLoading, ProfessionalSearch } from "@/components/enterprise/professional/professional-erp-ui";
 import { fetchOperationalFinanceRecord, useOperationalFinanceCollection } from "@/components/enterprise/professional/use-operational-finance-collection";
 import { financeMutation, type FinanceRecord } from "@/components/enterprise/professional/finance-professional-workspace-shared";
-import { financeDate, financeEnumLabel, financeMoney, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
+import { financeDate, financeEnumLabel, financeStatusLabel, financeStatusTone, safeFinanceError, type FinanceLocale } from "@/components/enterprise/professional/finance-professional-ui";
 import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,7 @@ type Item = FinanceRecord & {
   fiscalPeriod?: { id?: string; code?: string; fiscalYear?: { code?: string } | null } | null;
   asset?: { id?: string; code?: string; name?: string; serialNumber?: string | null; status?: string } | null;
   depreciationMethod?: string; usefulLifeMonths?: number; originalCost?: string | number; residualValue?: string | number;
+  accumulatedDepreciation?: string | null; netBookValue?: string | null;
   capabilities?: CloseCapabilities & AssetCapabilities;
 };
 type CloseAction = { item: Item; action: "APPROVE" | "CLOSE" | "REOPEN" };
@@ -94,6 +95,13 @@ export function EnterpriseFinanceAdvancedWorkspace(props: Props) {
   const config = CONFIG[moduleCode];
   const t = (key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
   const detailsLabel = locale === "en" ? "Details" : "Détails";
+  const assetRegister = moduleCode === "FINANCE_ASSETS";
+  const reviewRequired = locale === "en" ? "Review required" : "À vérifier";
+  const assetAmounts = [
+    { key: "originalCost", labelFr: "Coût d’acquisition", labelEn: "Acquisition cost" },
+    { key: "accumulatedDepreciation", labelFr: "Amortissements comptabilisés", labelEn: "Posted depreciation" },
+    { key: "netBookValue", labelFr: "Valeur nette comptable", labelEn: "Net book value" },
+  ] as const;
   const accumulatedDepreciationAccountLabel = locale === "en" ? "Accumulated depreciation account" : "Compte d’amortissements cumulés";
   const searchParams = useSearchParams();
   const [search, setSearch] = useState("");
@@ -115,6 +123,7 @@ export function EnterpriseFinanceAdvancedWorkspace(props: Props) {
   const endpoint = `/api/enterprise/${organizationId}/${config.endpoint}`;
   const filters = { search, status, dateFrom, dateTo };
   const collection = useOperationalFinanceCollection<Item>({ endpoint, page, search, status, filters: { dateFrom, dateTo }, refreshKey });
+  const valuationReview = Array.isArray(collection.metrics.assetValuationUnavailableScopes) && collection.metrics.assetValuationUnavailableScopes.length > 0;
   const exportColumns: FinanceExportColumn[] = [
     { key: "reference", labelFr: "Référence / code", labelEn: "Reference / code", get: (row) => String(row.code || row.reference || row.id || "") },
     { key: "name", labelFr: "Désignation", labelEn: "Description", get: (row) => itemTitle(row as Item, moduleCode, locale) },
@@ -122,6 +131,7 @@ export function EnterpriseFinanceAdvancedWorkspace(props: Props) {
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || ""), locale) },
     { key: "date", labelFr: "Date métier", labelEn: "Business date", get: (row) => financeDate(row.inServiceDate || row.periodStart || row.createdAt || row.generatedAt, locale) },
     { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || "") },
+    ...(assetRegister ? assetAmounts.map(column => ({ ...column, get: (row: Record<string, unknown>) => String(row[column.key] ?? reviewRequired) })) : []),
   ];
 
   useEffect(() => {
@@ -181,8 +191,16 @@ export function EnterpriseFinanceAdvancedWorkspace(props: Props) {
       <Button type="button" variant="outline" size="sm" onClick={() => { setSearch(""); setStatus(""); setDateFrom(""); setDateTo(""); setPage(1); }}><RotateCcw className="h-4 w-4" />{t("reset")}</Button>
       <FinanceExportControls endpoint={endpoint} organizationName={organizationName} title={locale === "en" ? definition.labelEn : definition.labelFr} locale={locale} filters={filters} columns={exportColumns} disabled={collection.loading} />
     </div>} summary={`${collection.pagination.total} ${t("itemPlural")}`} />
-    <ModuleContent>{moduleCode === "FINANCE_TAX" ? <><TaxCatalogPanel organizationId={organizationId} locale={locale} canCreate={canCreate} onAdopted={() => refresh()} /><TaxRulesPanel organizationId={organizationId} locale={locale} canCreate={canCreate} canManage={canManage} onChanged={() => refresh()} /></> : null}{moduleCode === "FINANCE_TAX" ? <FinanceTemplateImportControls kind="tax" organizationId={organizationId} organizationName={organizationName} locale={locale} canImport={canCreate} onImported={() => refresh()} /> : null}<ModuleSection title={locale === "en" ? definition.labelEn : definition.labelFr} description={moduleCode === "FINANCE_CLOSE" ? t("closeSectionDescription") : t("advancedSectionDescription")} count={collection.pagination.total}>
-      {collection.loading ? <ProfessionalLoading /> : collection.error ? <ProfessionalError message={collection.error} /> : collection.items.length === 0 ? <div className="flex min-h-48 items-center justify-center border-y border-dashed border-dtsc-border py-10 text-sm text-dtsc-muted">{t("noDataForView")}</div> : <div className="divide-y divide-dtsc-border border-y border-dtsc-border">{collection.items.map((item) => <article key={item.id} className="py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><button type="button" className="min-w-0 flex-1 text-left" onClick={() => setDetail(item)}><div className="flex flex-wrap items-center gap-2"><h3 className="break-words font-black text-dtsc-ink">{itemTitle(item, moduleCode, locale)}</h3>{item.status ? <StatusBadge tone={financeStatusTone(item.status)}>{financeStatusLabel(item.status, locale)}</StatusBadge> : null}</div><p className="mt-1 text-sm text-dtsc-muted">{itemSubtitle(item, moduleCode, locale)}</p>{moduleCode === "FINANCE_ASSETS" ? <p className="mt-2 text-sm font-black">{financeMoney(item.originalCost || 0, item.currencyCode || "USD", locale)}</p> : null}</button><div className="flex flex-wrap gap-2">{moduleCode === "FINANCE_STATEMENTS" ? <FinancialStatementReportDialog organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} statementId={item.id} locale={rawLocale} /> : <Button size="sm" variant="outline" onClick={() => setDetail(item)}>{detailsLabel}</Button>}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canSubmit ? <Button size="sm" variant="outline" onClick={() => setApprovalTarget(item)}><Send className="h-4 w-4" />{t("actionSubmit")}</Button> : null}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canApprove ? <Button size="sm" onClick={() => setCloseAction({ item, action: "APPROVE" })}><CheckCircle2 className="h-4 w-4" />{t("actionApprove")}</Button> : null}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canClose ? <Button size="sm" onClick={() => setCloseAction({ item, action: "CLOSE" })}>{t("closePeriod")}</Button> : null}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canReopen ? <Button size="sm" variant="outline" onClick={() => setCloseAction({ item, action: "REOPEN" })}>{t("requestReopening")}</Button> : null}</div></div></article>)}</div>}
+    <ModuleContent>{assetRegister && !collection.loading && !collection.error ? <>
+      <FinanceAmountScopes totals={collection} locale={locale} />
+      {valuationReview ? <p role="status" className="text-sm text-dtsc-muted">
+        {locale === "en" ? "Some asset totals require review of the linked journal entries." : "Certains totaux d’immobilisations nécessitent de vérifier les écritures liées."}
+      </p> : null}
+    </> : null}{moduleCode === "FINANCE_TAX" ? <><TaxCatalogPanel organizationId={organizationId} locale={locale} canCreate={canCreate} onAdopted={() => refresh()} /><TaxRulesPanel organizationId={organizationId} locale={locale} canCreate={canCreate} canManage={canManage} onChanged={() => refresh()} /></> : null}{moduleCode === "FINANCE_TAX" ? <FinanceTemplateImportControls kind="tax" organizationId={organizationId} organizationName={organizationName} locale={locale} canImport={canCreate} onImported={() => refresh()} /> : null}<ModuleSection title={locale === "en" ? definition.labelEn : definition.labelFr} description={moduleCode === "FINANCE_CLOSE" ? t("closeSectionDescription") : t("advancedSectionDescription")} count={collection.pagination.total}>
+      {collection.loading ? <ProfessionalLoading /> : collection.error ? <ProfessionalError message={collection.error} /> : collection.items.length === 0 ? <div className="flex min-h-48 items-center justify-center border-y border-dashed border-dtsc-border py-10 text-sm text-dtsc-muted">{t("noDataForView")}</div> : <div className="divide-y divide-dtsc-border border-y border-dtsc-border">{collection.items.map((item) => <article key={item.id} className="py-4"><div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between"><button type="button" className="min-w-0 flex-1 text-left" onClick={() => setDetail(item)}><div className="flex flex-wrap items-center gap-2"><h3 className="break-words font-black text-dtsc-ink">{itemTitle(item, moduleCode, locale)}</h3>{item.status ? <StatusBadge tone={financeStatusTone(item.status)}>{financeStatusLabel(item.status, locale)}</StatusBadge> : null}</div><p className="mt-1 text-sm text-dtsc-muted">{itemSubtitle(item, moduleCode, locale)}</p>{assetRegister ? <dl className="mt-2 flex min-w-0 flex-wrap gap-x-4 gap-y-1 text-sm">{assetAmounts.map(({ key, labelFr, labelEn }) => <div key={key} className="min-w-0 break-words">
+        <dt className="text-dtsc-muted">{locale === "en" ? labelEn : labelFr}</dt>
+        <dd className="font-semibold text-dtsc-ink">{item[key] == null || !item.currencyCode ? reviewRequired : formatAnalyticsAmount({ amount: String(item[key]), currencyCode: item.currencyCode }, locale)}</dd>
+      </div>)}</dl> : null}</button><div className="flex flex-wrap gap-2">{moduleCode === "FINANCE_STATEMENTS" ? <FinancialStatementReportDialog organizationId={organizationId} organizationName={organizationName} organizationLogoUrl={organizationLogoUrl} statementId={item.id} locale={rawLocale} /> : <Button size="sm" variant="outline" onClick={() => setDetail(item)}>{detailsLabel}</Button>}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canSubmit ? <Button size="sm" variant="outline" onClick={() => setApprovalTarget(item)}><Send className="h-4 w-4" />{t("actionSubmit")}</Button> : null}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canApprove ? <Button size="sm" onClick={() => setCloseAction({ item, action: "APPROVE" })}><CheckCircle2 className="h-4 w-4" />{t("actionApprove")}</Button> : null}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canClose ? <Button size="sm" onClick={() => setCloseAction({ item, action: "CLOSE" })}>{t("closePeriod")}</Button> : null}{moduleCode === "FINANCE_CLOSE" && item.capabilities?.canReopen ? <Button size="sm" variant="outline" onClick={() => setCloseAction({ item, action: "REOPEN" })}>{t("requestReopening")}</Button> : null}</div></div></article>)}</div>}
       {collection.pagination.pageCount > 1 ? <div className="mt-4 flex items-center justify-between"><Button variant="outline" disabled={page <= 1} onClick={() => setPage((value) => Math.max(1, value - 1))}>{t("previous")}</Button><span className="text-sm font-bold text-dtsc-muted">{collection.pagination.page}/{collection.pagination.pageCount}</span><Button variant="outline" disabled={page >= collection.pagination.pageCount} onClick={() => setPage((value) => Math.min(collection.pagination.pageCount, value + 1))}>{t("next")}</Button></div> : null}
     </ModuleSection><ProfessionalHelp moduleCode={config.help} /></ModuleContent>
 

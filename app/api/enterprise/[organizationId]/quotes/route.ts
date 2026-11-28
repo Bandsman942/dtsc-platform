@@ -1,3 +1,4 @@
+import { commercialAmountTotals, commercialPageTotals, commercialStatusCount } from "@/lib/enterprise/common/analytics";
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
@@ -50,9 +51,9 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({ error: "SALES_SEARCH_TOO_BROAD", message: "Trop de clients correspondent : affinez la recherche." }, { status: 422 });
   }
   const clientIds = matchingParties.map((party) => party.id);
+  const base: Prisma.EnterpriseQuoteWhereInput = { organizationId, archivedAt: null };
   const where: Prisma.EnterpriseQuoteWhereInput = {
-    organizationId,
-    archivedAt: null,
+    ...base,
     ...(search ? { OR: [
       { title: { contains: search, mode: "insensitive" } },
       { reference: { contains: search, mode: "insensitive" } },
@@ -62,22 +63,28 @@ export async function GET(req: Request, { params }: Params) {
     ...(status ? { status } : {}),
     ...(businessPartyId ? { businessPartyId } : {}),
   };
-  const [items, total, draft, sent, accepted, converted] = await Promise.all([
-    prisma.enterpriseQuote.findMany({
+  const { items, total, filteredGroups, generalGroups } = await prisma.$transaction(async tx => {
+    const [items, total, filteredGroups, generalGroups] = await Promise.all([
+    tx.enterpriseQuote.findMany({
       where,
-      orderBy: [{ createdAt: "desc" }],
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: {
         items: { orderBy: { sortOrder: "asc" }, take: 50 },
       },
     }),
-    prisma.enterpriseQuote.count({ where }),
-    prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "DRAFT" } }),
-    prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "SENT" } }),
-    prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "ACCEPTED" } }),
-    prisma.enterpriseQuote.count({ where: { organizationId, archivedAt: null, status: "CONVERTED" } }),
-  ]);
+    tx.enterpriseQuote.count({ where }),
+    tx.enterpriseQuote.groupBy({ by: ["currency", "status"], where, _sum: { subtotalAmount: true, discountAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+    tx.enterpriseQuote.groupBy({ by: ["currency", "status"], where: base, _sum: { subtotalAmount: true, discountAmount: true, taxAmount: true, totalAmount: true }, _count: { _all: true } }),
+    ]);
+    return { items, total, filteredGroups, generalGroups };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const draft = commercialStatusCount(filteredGroups, ["DRAFT"]);
+  const sent = commercialStatusCount(filteredGroups, ["SENT"]);
+  const accepted = commercialStatusCount(filteredGroups, ["ACCEPTED"]);
+  const converted = commercialStatusCount(filteredGroups, ["CONVERTED"]);
+  const generalMetrics = { draft: commercialStatusCount(generalGroups, ["DRAFT"]), sent: commercialStatusCount(generalGroups, ["SENT"]), accepted: commercialStatusCount(generalGroups, ["ACCEPTED"]), converted: commercialStatusCount(generalGroups, ["CONVERTED"]) };
   const partyIds = [...new Set(items.map((item) => item.businessPartyId))];
   const parties = partyIds.length
     ? await prisma.enterpriseBusinessParty.findMany({
@@ -93,6 +100,10 @@ export async function GET(req: Request, { params }: Params) {
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "quotes", page } });
   return NextResponse.json({
     items: projectedItems,
+    filteredTotals: commercialAmountTotals(filteredGroups),
+    generalTotals: commercialAmountTotals(generalGroups),
+    pageTotals: commercialPageTotals(items),
+    generalMetrics,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { draft, sent, accepted, converted },
     canManage: access.canManage,

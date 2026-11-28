@@ -59,7 +59,7 @@ export function ErpDesign2RegisterSection({ title, description, count, action, c
   return <section data-erp-design2-register id={id}
     className="min-w-0 max-w-full rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm sm:p-5">
     <div className="mb-3 flex min-w-0 flex-wrap items-start justify-between gap-3 border-l-[3px] border-cyan-500 pl-3">
-      <div className="min-w-0 flex-1">
+      <div className="min-w-0 basis-full sm:basis-0 sm:flex-1">
         <h2 className="min-w-0 break-words text-base font-black tracking-tight text-dtsc-ink sm:text-lg">{title}</h2>
         {description ? <p className="mt-1 max-w-4xl break-words text-xs leading-5 text-dtsc-muted sm:text-sm">{description}</p> : null}
       </div>

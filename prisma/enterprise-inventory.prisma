@@ -3,8 +3,8 @@ model EnterpriseInventoryItem {
   organizationId     String
   catalogItemId      String
   status             String                          @default("ACTIVE")
-  minimumQuantity    Decimal?                        @db.Decimal(18, 3)
-  reorderQuantity    Decimal?                        @db.Decimal(18, 3)
+  minimumQuantity    Decimal?                        @db.Decimal(21, 6)
+  reorderQuantity    Decimal?                        @db.Decimal(21, 6)
   allowNegativeStock Boolean                         @default(false)
   lotTracking        Boolean                         @default(false)
   expiryTracking     Boolean                         @default(false)
@@ -74,8 +74,8 @@ model EnterpriseInventoryBalance {
   warehouseId       String
   storageLocationId String?
   stockLotId        String?
-  quantityOnHand    Decimal                    @default(0) @db.Decimal(18, 3)
-  quantityReserved  Decimal                    @default(0) @db.Decimal(18, 3)
+  quantityOnHand    Decimal                    @default(0) @db.Decimal(21, 6)
+  quantityReserved  Decimal                    @default(0) @db.Decimal(21, 6)
   revision          Int                        @default(1)
   updatedAt         DateTime                   @updatedAt
   inventoryItem     EnterpriseInventoryItem    @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
@@ -98,8 +98,8 @@ model EnterpriseStockMovement {
   stockLotId          String?
   movementType        String
   direction           String
-  quantity            Decimal                    @db.Decimal(18, 3)
-  balanceAfter         Decimal?                   @db.Decimal(18, 3)
+  quantity            Decimal                    @db.Decimal(21, 6)
+  balanceAfter         Decimal?                   @db.Decimal(21, 6)
   occurredAt           DateTime                   @default(now())
   sourceEntityType     String?
   sourceEntityId       String?
@@ -162,9 +162,9 @@ model EnterpriseInventoryCountLine {
   inventoryCountId   String
   inventoryItemId    String
   stockLotId         String?
-  expectedQuantity   Decimal                  @db.Decimal(18, 3)
-  countedQuantity    Decimal?                 @db.Decimal(18, 3)
-  varianceQuantity   Decimal?                 @db.Decimal(18, 3)
+  expectedQuantity   Decimal                  @db.Decimal(21, 6)
+  countedQuantity    Decimal?                 @db.Decimal(21, 6)
+  varianceQuantity   Decimal?                 @db.Decimal(21, 6)
   countedByUserId    String?
   countedAt          DateTime?
   notes              String?
@@ -219,7 +219,8 @@ model EnterpriseStockTransferLine {
   stockLotId           String?
   sourceLocationId     String?
   destinationLocationId String?
-  quantity             Decimal                   @db.Decimal(18, 3)
+  quantity             Decimal                   @db.Decimal(21, 6)
+  unitConversionJson   Json?
   createdAt            DateTime                  @default(now())
   stockTransfer        EnterpriseStockTransfer   @relation(fields: [organizationId, stockTransferId], references: [organizationId, id], onDelete: Cascade)
   inventoryItem        EnterpriseInventoryItem   @relation(fields: [organizationId, inventoryItemId], references: [organizationId, id], onDelete: Restrict)
@@ -241,7 +242,7 @@ model EnterpriseStockAdjustment {
   stockLotId        String?
   adjustmentType    String
   lossReason        String?
-  quantity          Decimal                 @db.Decimal(18, 3)
+  quantity          Decimal                 @db.Decimal(21, 6)
   reason             String
   status             String                  @default("DRAFT")
   requestedByUserId String
@@ -285,7 +286,7 @@ model EnterpriseSupplierReturnRequest {
   supplierInvoiceItemId   String
   receiptAccountingEventId String
   originCostLayerId       String
-  quantity                Decimal @db.Decimal(18, 3)
+  quantity                Decimal @db.Decimal(21, 6)
   unitCost                Decimal @db.Decimal(20, 6)
   totalCost               Decimal @db.Decimal(20, 6)
   recoverableTaxAmount    Decimal @default(0) @db.Decimal(20, 6)
@@ -364,7 +365,7 @@ model EnterpriseStockLotReclassification {
   itemRevision          Int
   warehouseId           String
   storageLocationId     String?
-  quantity              Decimal  @db.Decimal(18, 3)
+  quantity              Decimal  @db.Decimal(21, 6)
   allocations           Json
   reason                String
   requestedByUserId     String
@@ -390,7 +391,7 @@ model EnterpriseInventoryReturnCustody {
   organizationId String
   returnLineId String
   originalMovementId String
-  quantity Decimal @db.Decimal(20, 6)
+  quantity Decimal @db.Decimal(21, 6)
   disposition String
   status String
   inspectedByUserId String
@@ -436,7 +437,7 @@ model EnterpriseInventoryReturnRecoveryAssessment {
   reference String
   status String @default("PENDING_APPROVAL")
   custodyRevision Int
-  quantity Decimal @db.Decimal(20,6)
+  quantity Decimal @db.Decimal(21, 6)
   historicalCostCeiling Decimal @db.Decimal(20,6)
   estimatedSellingAmount Decimal @db.Decimal(20,6)
   completionCost Decimal @db.Decimal(20,6)

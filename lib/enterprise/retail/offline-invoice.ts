@@ -24,7 +24,7 @@ const draftSchema = z.object({
   tenders: z.array(z.unknown()).length(0),
   lines: z.array(z.object({
     catalogItemId: z.string().min(1),
-    quantity: z.number().finite().positive().max(1_000_000).refine((v) => Math.abs(v * 1000 - Math.round(v * 1000)) < 0.000001),
+    quantity: z.number().finite().positive().max(1_000_000).refine((v) => new Prisma.Decimal(v).decimalPlaces() <= 6),
     unitPrice: nonNegativeMoney,
     discountAmount: nonNegativeMoney,
     taxAmount: nonNegativeMoney,

@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 // Prisma.Decimal (decimal.js-light) does not provide static min/max.
 const decimalMin = (a: Prisma.Decimal, b: Prisma.Decimal): Prisma.Decimal => a.lessThan(b) ? a : b;
@@ -317,7 +318,7 @@ async function resolvePricingDecisions(
 
   const items = await prisma.enterpriseCatalogItem.findMany({
     where: { organizationId, id: { in: catalogItemIds }, status: "ACTIVE", archivedAt: null },
-    select: { id: true, name: true, categoryId: true, currency: true, indicativeSalePrice: true, taxable: true, taxCode: true },
+    select: { id: true, name: true, categoryId: true, currency: true, indicativeSalePrice: true, taxable: true, taxCode: true, unitOfMeasure: { select: { decimalScale: true } } },
   });
   if (items.length !== catalogItemIds.length) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
   const itemById = new Map(items.map((item) => [item.id, item]));
@@ -379,7 +380,7 @@ async function resolvePricingDecisions(
     const item = itemById.get(line.catalogItemId);
     if (!item) throw new EnterpriseRetailError("RETAIL_CATALOG_ITEM_INVALID", 409);
     if (item.currency && item.currency !== input.currencyCode && !context.invoiceCheckoutFx) throw new EnterpriseRetailError("RETAIL_CURRENCY_MISMATCH", 409, { catalogItemId: item.id });
-    const quantity = decimal(line.quantity);
+    const quantity = requireInventoryQuantity(line.quantity, item.unitOfMeasure.decimalScale, { positive: true });
     const sourceCurrency = sourceCurrencyByItem.get(item.id) || input.currencyCode;
     const conversion = ratesBySource.get(sourceCurrency);
     const candidates = (pricesByItemId.get(item.id) || []).filter((price) => price.currency === sourceCurrency).flatMap((price) => {

@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { MOBILE_MONEY_FEE_COLLECTION_MODES, MOBILE_MONEY_TRANSACTION_TYPES, RETAIL_CLOSE_ACCOUNT_TYPES, RETAIL_TENDER_METHODS, TELCO_TOPUP_STATUSES } from "@/lib/enterprise/retail/constants";
 
@@ -7,6 +8,12 @@ const currency = z.string().trim().min(3).max(3).transform((value) => value.toUp
 const phone = z.string().trim().min(5).max(40);
 const id = z.string().trim().min(1).max(240);
 const idempotencyKey = z.string().trim().min(8).max(180);
+
+export const retailSaleQuantitySchema = z.union([z.number().finite(), z.string().trim().max(64)]).refine(value => {
+  if (typeof value === "string" && !/^[+-]?(?:\d+(?:\.\d*)?|\.\d+)(?:[eE][+-]?\d+)?$/.test(value)) return false;
+  const approximate = Number(value);
+  return Number.isFinite(approximate) && approximate > 0 && approximate <= 1_000_000 && new Prisma.Decimal(value).decimalPlaces() <= 6;
+}, "INVENTORY_PHYSICAL_QUANTITY_PRECISION").transform(Number);
 
 export const retailProviderUpsertSchema = z.object({
   providerCode: z.string().trim().min(2).max(40).transform((value) => value.toUpperCase().replace(/[^A-Z0-9_]/g, "_")),
@@ -30,7 +37,7 @@ export const retailSaleCreateSchema = z.object({
     catalogItemId: id,
     inventoryItemId: id.optional().nullable(),
     stockLotId: id.optional().nullable(),
-    quantity: z.coerce.number().finite().positive().max(1_000_000),
+    quantity: retailSaleQuantitySchema,
     unitPrice: money,
     discountAmount: money.default(0),
     taxAmount: money.default(0),

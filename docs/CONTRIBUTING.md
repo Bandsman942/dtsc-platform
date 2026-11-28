@@ -12,7 +12,7 @@ Une contribution ne commence pas par l'édition d'un fichier. Avant le premier c
 
 Le préflight obligatoire est :
 
-1. lire `AGENTS.md`, `docs/CONTRIBUTING.md` et les éventuels `AGENTS.md` scoped du chemin touché ;
+1. lire `AGENTS.md`, `docs/CONTRIBUTING.md`, le [Design 2.0 normatif](DTSC_FRONTEND_DESIGN_SYSTEM.md) **obligatoirement avant de coder**, et les éventuels `AGENTS.md` scoped du chemin touché ;
 2. vérifier le SHA réel du dernier `main` et partir de ce SHA ;
 3. créer ou identifier l'Issue réelle avec critères d'acceptation, risques, labels structurés et milestone si requis ;
 4. créer une branche conforme incluant le numéro d'Issue ;
@@ -33,6 +33,7 @@ Le contributeur ne doit pas supposer qu'un fichier visible est isolé. Les dépe
 - `lib/enterprise/module-registry*`, les resolvers d'accès/entitlements et les QA de registre pour tout module ERP ;
 - les contrats d'abonnement/capabilities et les resolvers d'accès avant toute activation de module ou capacité IA ;
 - les gateways/outils IA, règles de permission et documents IA lorsqu'une capacité est lisible ou actionnable par un assistant ;
+- [`docs/DTSC_FRONTEND_DESIGN_SYSTEM.md`](DTSC_FRONTEND_DESIGN_SYSTEM.md) pour toute contribution ; appliquer notamment les contrats de quantités, agrégations, libellés et exports sur les surfaces concernées ;
 - `docs/FORM_UX_CONTRACT.md` pour tout formulaire ;
 - `docs/RESPONSIVE_UI_CONTRACT.md` pour toute UI matérielle ;
 - les catalogues i18n canoniques du domaine pour toute chaîne client ;

@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeErrorResponse } from "@/lib/enterprise/accounting/http";
 import {
@@ -74,7 +75,7 @@ export async function GET(req: Request, { params }: Params) {
     let data: unknown;
 
     if (view === "general-ledger") {
-      data = await getAccountingGeneralLedger(prisma, organizationId, filters);
+      data = await prisma.$transaction(tx => getAccountingGeneralLedger(tx, organizationId, filters), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
     } else if (view === "trial-balance") {
       data = await getAccountingTrialBalance(prisma, organizationId, filters);
     } else if (view === "anomalies") {

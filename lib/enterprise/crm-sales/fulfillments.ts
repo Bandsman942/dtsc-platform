@@ -12,6 +12,7 @@ import { tryGrantRetailOmnichannelCashbackTx } from "@/lib/enterprise/relationsh
 import { valueRetailOmnichannelFulfillmentIssuesTx } from "@/lib/enterprise/retail/accounting";
 import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
+import { addInventoryQuantities, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 type FulfillmentCreateInput = z.infer<typeof fulfillmentCreateSchema>;
 
@@ -29,7 +30,7 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
     const [order, retailOrchestration] = await Promise.all([
       tx.enterpriseSalesOrder.findFirst({
         where: { id: salesOrderId, organizationId, archivedAt: null },
-        include: { items: { include: { catalogItem: { select: { trackInventory: true } } } } },
+        include: { items: { include: { catalogItem: { select: { trackInventory: true, unitOfMeasure: { select: { decimalScale: true } } } } } } },
       }),
       tx.enterpriseRetailOrderOrchestration.findFirst({
         where: { organizationId, salesOrderId, archivedAt: null },
@@ -55,15 +56,16 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
     for (const requestItem of input.items) {
       const orderItem = order.items.find((item) => item.id === requestItem.salesOrderItemId);
       if (!orderItem) throw new EnterpriseDomainError("SALES_ORDER_ITEM_NOT_FOUND", 404);
-      const remaining = Number(orderItem.quantityOrdered) - Number(orderItem.quantityFulfilled);
-      if (requestItem.quantityFulfilled > remaining + 0.000001) {
+      const requestedQuantity = requireInventoryQuantity(requestItem.quantityFulfilled, orderItem.catalogItem?.unitOfMeasure.decimalScale ?? 6, { positive: true });
+      const remaining = addInventoryQuantities(orderItem.quantityOrdered, orderItem.quantityFulfilled.negated());
+      if (requestedQuantity.gt(remaining)) {
         throw new EnterpriseDomainError("FULFILLMENT_QUANTITY_EXCEEDED", 409);
       }
     }
     if (retailOrchestration && !input.acceptedByCustomer) {
       const willFullyDeliver = order.items.every((item) => {
         const arriving = requestedByItem.get(item.id)?.quantityFulfilled || 0;
-        return Number(item.quantityFulfilled) + arriving >= Number(item.quantityOrdered);
+        return addInventoryQuantities(item.quantityFulfilled, arriving).gte(item.quantityOrdered);
       });
       if (willFullyDeliver) {
         const reservedBenefits = await tx.enterpriseRelationshipBenefitUsage.count({
@@ -181,8 +183,8 @@ export async function createEnterpriseFulfillment(organizationId: string, salesO
       where: { organizationId, salesOrderId: order.id },
       select: { quantityOrdered: true, quantityFulfilled: true },
     });
-    const fullyFulfilled = refreshed.every((item) => Number(item.quantityFulfilled) >= Number(item.quantityOrdered));
-    const partiallyFulfilled = refreshed.some((item) => Number(item.quantityFulfilled) > 0);
+    const fullyFulfilled = refreshed.every((item) => item.quantityFulfilled.gte(item.quantityOrdered));
+    const partiallyFulfilled = refreshed.some((item) => item.quantityFulfilled.gt(0));
     const targetStatus = fullyFulfilled ? "FULFILLED" : partiallyFulfilled ? "PARTIALLY_FULFILLED" : "IN_FULFILLMENT";
     const updated = await tx.enterpriseSalesOrder.updateMany({
       where: { id: order.id, organizationId, revision: input.revision, status: order.status },

@@ -139,7 +139,7 @@ export async function assertRetailInvoiceReturnSettlementReadinessTx(
     if (line.stockDisposition === "RESTOCK" && !source.inventoryItemId) {
       throw conflict("RETAIL_INVOICE_RETURN_SETTLEMENT_STOCK_INVALID");
     }
-    if (source.inventoryItemId && line.quantity.decimalPlaces() > 3) {
+    if (source.inventoryItemId && line.quantity.decimalPlaces() > 6) {
       throw conflict("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION");
     }
     ids.add(source.id);

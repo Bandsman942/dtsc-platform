@@ -68,33 +68,41 @@ export async function GET(req: Request, { params }: Params) {
     ] } } : {}),
   };
   const today = startOfUtcDay();
-  const [items, total, openByCurrency, overdueByCurrency] = await Promise.all([
-    prisma.enterpriseReceivable.findMany({
+  const [items, total, openByCurrency, overdueByCurrency, filtered] = await prisma.$transaction(async tx => {
+    const result = await Promise.all([
+    tx.enterpriseReceivable.findMany({
       where,
       orderBy: [{ dueDate: "asc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { salesInvoice: true, _count: { select: { paymentAllocations: true, allocations: true } } },
     }),
-    prisma.enterpriseReceivable.count({ where }),
-    prisma.enterpriseReceivable.groupBy({
+    tx.enterpriseReceivable.count({ where }),
+    tx.enterpriseReceivable.groupBy({
       by: ["currencyCode"],
       where: { organizationId, status: "OPEN", ...(siteReceivableScope ? { AND: [siteReceivableScope] } : {}) },
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
-    prisma.enterpriseReceivable.groupBy({
+    tx.enterpriseReceivable.groupBy({
       by: ["currencyCode"],
       where: { organizationId, status: "OPEN", dueDate: { lt: today }, ...(siteReceivableScope ? { AND: [siteReceivableScope] } : {}) },
       _sum: { outstandingAmount: true },
       _count: { _all: true },
     }),
-  ]);
+    tx.enterpriseReceivable.groupBy({ by: ["currencyCode"], where, _sum: { originalAmount: true, outstandingAmount: true } }),
+    ]);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "receivables", page, overdue, ageBucket } });
   return NextResponse.json({
     items,
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     metrics: { openByCurrency, overdueByCurrency },
+    filteredTotals: filtered.flatMap(row => [
+      { currencyCode: row.currencyCode, metric: "original", amount: row._sum.originalAmount?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, metric: "outstanding", amount: row._sum.outstandingAmount?.toFixed() ?? "0" },
+    ]),
   });
 }

@@ -15,7 +15,7 @@ const entry = z.object({
   lotNumber: z.string().trim().min(1).max(120),
   productionDate: z.iso.date().nullable(),
   expiryDate: z.iso.date().nullable(),
-  quantity: z.string().regex(/^\d{1,15}(\.\d{1,3})?$/),
+  quantity: z.string().regex(/^\d{1,15}(\.\d{1,6})?$/),
 }).strict();
 const allocationsSchema = z.array(entry).min(1).max(100);
 export const lotReclassificationSchema = z.object({
@@ -37,7 +37,7 @@ export function validateLotReclassificationAllocations(allocations: Allocation[]
   let total = zero();
   for (const batch of allocations) {
     const amount = new Prisma.Decimal(batch.quantity);
-    if (seen.has(batch.lotNumber) || amount.lte(0) || amount.decimalPlaces() > 3 || (!batch.expiryDate && expiryRequired)
+    if (seen.has(batch.lotNumber) || amount.lte(0) || amount.decimalPlaces() > 6 || (!batch.expiryDate && expiryRequired)
       || (batch.productionDate && batch.expiryDate && batch.productionDate > batch.expiryDate)) {
       throw new EnterpriseDomainError("STOCK_RECLASS_ALLOCATION_INVALID", 400);
     }

@@ -1,4 +1,4 @@
-import { Prisma } from "@prisma/client";
+import { Prisma, type EnterpriseRetailProviderOperation } from "@prisma/client";
 import type { z } from "zod";
 import { transitionRetailProviderOperation } from "@/lib/enterprise/retail/customer-payments";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -10,8 +10,9 @@ import {
   type RetailProviderResult,
 } from "@/lib/enterprise/retail/payment-provider-adapter";
 import { mobileMoneyCreateSchema, telcoTopupCreateSchema } from "@/lib/enterprise/retail/schemas";
-import { createMobileMoneyTransaction, createTelcoTopup } from "@/lib/enterprise/retail/service";
+import { assertConnectedMobileMoneyIntentTx, createMobileMoneyTransactionWithPostingTx, createTelcoTopup } from "@/lib/enterprise/retail/service";
 import { finalizeTelcoTopupAccounting } from "@/lib/enterprise/retail/telco-accounting";
+import { withRetailTransactionRetry } from "@/lib/enterprise/retail/transaction-retry";
 import { prisma } from "@/lib/prisma";
 
 type MobileMoneyInput = z.infer<typeof mobileMoneyCreateSchema>;
@@ -122,18 +123,18 @@ async function getOrCreatePendingOperation(args: {
   idempotencyKey: string;
   timeoutMs: number;
   retryMs: number;
-}) {
+  validateIntent?: (existing: EnterpriseRetailProviderOperation | null) => Promise<void>;
+}, db: Prisma.TransactionClient = prisma) {
   const providerKey = `operator:${args.idempotencyKey}`;
-  const existing = await prisma.enterpriseRetailProviderOperation.findFirst({
+  const existing = await db.enterpriseRetailProviderOperation.findFirst({
     where: { organizationId: args.organizationId, idempotencyKey: providerKey },
   });
-  if (existing) {
-    if (existing.providerId !== args.providerId) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
-    return { operation: existing, idempotent: true };
-  }
+  if (existing && existing.providerId !== args.providerId) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  await args.validateIntent?.(existing);
+  if (existing) return { operation: existing, idempotent: true };
 
   const now = Date.now();
-  const operation = await prisma.enterpriseRetailProviderOperation.create({
+  const operation = await db.enterpriseRetailProviderOperation.create({
     data: {
       organizationId: args.organizationId,
       providerId: args.providerId,
@@ -206,6 +207,44 @@ async function initiateProviderOperation(args: {
   }
 }
 
+async function finalizeConnectedMobileMoney(organizationId: string, operationId: string) {
+  return withRetailTransactionRetry(() => prisma.$transaction(async tx => {
+    await tx.$queryRaw(Prisma.sql`SELECT id FROM "EnterpriseRetailProviderOperation" WHERE "organizationId" = ${organizationId} AND id = ${operationId} FOR UPDATE`);
+    const operation = await tx.enterpriseRetailProviderOperation.findUnique({ where: { organizationId_id: { organizationId, id: operationId } } });
+    if (!operation) throw new EnterpriseRetailError("RETAIL_PROVIDER_OPERATION_NOT_FOUND", 404);
+    if (operation.sourceEntityType === ACTUAL_MOBILE_MONEY) {
+      const transaction = await tx.enterpriseMobileMoneyTransaction.findFirst({ where: { id: operation.sourceEntityId, organizationId } });
+      return transaction ? { kind: "MOBILE_MONEY" as const, transaction, idempotent: true } : null;
+    }
+    if (operation.sourceEntityType !== PENDING_MOBILE_MONEY || operation.status !== "CONFIRMED") return null;
+    const parsed = mobileMoneyCreateSchema.safeParse({
+      ...jsonRecord(operation.requestPayloadJson),
+      ...(operation.externalReference ? { externalReference: operation.externalReference } : {}),
+    });
+    if (!parsed.success) throw new EnterpriseRetailError("RETAIL_PROVIDER_PAYLOAD_INVALID", 409);
+    const input = { ...parsed.data, occurredAt: parsed.data.occurredAt ?? operation.confirmedAt ?? operation.createdAt };
+    const result = await createMobileMoneyTransactionWithPostingTx(tx, organizationId, operation.createdByUserId, input);
+    const transaction = result.transaction;
+    if (result.idempotent && (
+      transaction.providerCode !== input.providerCode || transaction.transactionType !== input.transactionType ||
+      transaction.currencyCode !== input.currencyCode || transaction.cashAccountId !== input.cashAccountId ||
+      transaction.customerPhone !== input.customerPhone || !transaction.principalAmount.equals(input.principalAmount) ||
+      !transaction.customerFeeAmount.equals(input.customerFeeAmount) || transaction.feeCollectionMode !== input.feeCollectionMode ||
+      !transaction.providerCommissionAmount.equals(input.providerCommissionAmount) ||
+      (operation.externalReference && transaction.externalReference !== operation.externalReference)
+    )) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+    await tx.enterpriseRetailProviderOperation.update({
+      where: { organizationId_id: { organizationId, id: operation.id } },
+      data: { sourceEntityType: ACTUAL_MOBILE_MONEY, sourceEntityId: transaction.id },
+    });
+    await tx.enterpriseRetailProviderIntegration.updateMany({
+      where: { organizationId, providerId: operation.providerId, archivedAt: null },
+      data: { lastSuccessfulSyncAt: new Date() },
+    });
+    return { kind: "MOBILE_MONEY" as const, transaction, idempotent: result.idempotent };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 }));
+}
+
 export async function finalizeConfirmedRetailOperatorOperation(organizationId: string, operationId: string) {
   const operation = await prisma.enterpriseRetailProviderOperation.findFirst({ where: { id: operationId, organizationId } });
   if (!operation) throw new EnterpriseRetailError("RETAIL_PROVIDER_OPERATION_NOT_FOUND", 404);
@@ -224,29 +263,11 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
   }
   if (operation.status !== "CONFIRMED") return null;
 
-  const payload = jsonRecord(operation.requestPayloadJson);
-  if (operation.sourceEntityType === PENDING_MOBILE_MONEY) {
-    const parsed = mobileMoneyCreateSchema.safeParse({
-      ...payload,
-      ...(operation.externalReference ? { externalReference: operation.externalReference } : {}),
-    });
-    if (!parsed.success) throw new EnterpriseRetailError("RETAIL_PROVIDER_PAYLOAD_INVALID", 409);
-    const result = await createMobileMoneyTransaction(organizationId, operation.createdByUserId, parsed.data);
-    await finalizeMobileMoneyAccounting(organizationId, operation.createdByUserId, result.transaction.id);
-    await prisma.enterpriseRetailProviderOperation.update({
-      where: { id: operation.id },
-      data: { sourceEntityType: ACTUAL_MOBILE_MONEY, sourceEntityId: result.transaction.id },
-    });
-    await prisma.enterpriseRetailProviderIntegration.updateMany({
-      where: { organizationId, providerId: operation.providerId, archivedAt: null },
-      data: { lastSuccessfulSyncAt: new Date() },
-    });
-    return { kind: "MOBILE_MONEY" as const, transaction: result.transaction, idempotent: result.idempotent };
-  }
+  if (operation.sourceEntityType === PENDING_MOBILE_MONEY) return finalizeConnectedMobileMoney(organizationId, operation.id);
 
   if (operation.sourceEntityType === PENDING_TELCO_TOPUP) {
     const parsed = telcoTopupCreateSchema.safeParse({
-      ...payload,
+      ...jsonRecord(operation.requestPayloadJson),
       status: "SUCCESS",
       failureReason: null,
       ...(operation.externalReference ? { externalReference: operation.externalReference } : {}),
@@ -268,6 +289,24 @@ export async function finalizeConfirmedRetailOperatorOperation(organizationId: s
   return null;
 }
 
+function assertSameMobileMoneyIntent(existing: EnterpriseRetailProviderOperation, actorUserId: string, input: MobileMoneyInput) {
+  const parsed = mobileMoneyCreateSchema.safeParse(existing.requestPayloadJson);
+  if (!parsed.success || existing.createdByUserId !== actorUserId ||
+      (existing.sourceEntityType !== PENDING_MOBILE_MONEY && existing.sourceEntityType !== ACTUAL_MOBILE_MONEY)) {
+    throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  }
+  const saved = parsed.data;
+  if (
+    saved.idempotencyKey !== input.idempotencyKey || saved.providerCode !== input.providerCode ||
+    saved.cashAccountId !== input.cashAccountId || saved.currencyCode !== input.currencyCode ||
+    saved.transactionType !== input.transactionType || saved.customerPhone !== input.customerPhone ||
+    saved.principalAmount !== input.principalAmount || saved.customerFeeAmount !== input.customerFeeAmount ||
+    saved.feeCollectionMode !== input.feeCollectionMode || saved.providerCommissionAmount !== input.providerCommissionAmount ||
+    saved.occurredAt?.getTime() !== input.occurredAt?.getTime()
+  ) throw new EnterpriseRetailError("RETAIL_IDEMPOTENCY_CONFLICT", 409);
+  return saved;
+}
+
 export async function createConnectedMobileMoneyOperation(organizationId: string, actorUserId: string, input: MobileMoneyInput) {
   const connected = await resolveConnectedProvider(organizationId, input.providerCode, ["MOBILE_MONEY", "BOTH"]);
   if (!connected) return null;
@@ -275,7 +314,7 @@ export async function createConnectedMobileMoneyOperation(organizationId: string
     ...input,
     ...(input.occurredAt ? { occurredAt: input.occurredAt.toISOString() } : {}),
   };
-  const pending = await getOrCreatePendingOperation({
+  const pending = await prisma.$transaction(tx => getOrCreatePendingOperation({
     organizationId,
     actorUserId,
     providerId: connected.provider.id,
@@ -287,7 +326,11 @@ export async function createConnectedMobileMoneyOperation(organizationId: string
     idempotencyKey: input.idempotencyKey,
     timeoutMs: providerTimeoutMs(connected.integration.settingsJson),
     retryMs: providerRetryMs(connected.integration.settingsJson),
-  });
+    validateIntent: async existing => {
+      const intent = existing ? assertSameMobileMoneyIntent(existing, actorUserId, input) : input;
+      await assertConnectedMobileMoneyIntentTx(tx, organizationId, actorUserId, intent, existing !== null);
+    },
+  }, tx), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   const operation = pending.idempotent
     ? pending.operation
     : await initiateProviderOperation({
@@ -304,7 +347,14 @@ export async function createConnectedMobileMoneyOperation(organizationId: string
           feeCollectionMode: input.feeCollectionMode,
         },
       });
-  const finalized = await finalizeConfirmedRetailOperatorOperation(organizationId, operation.id);
+  let finalized: Awaited<ReturnType<typeof finalizeConfirmedRetailOperatorOperation>> = null;
+  try {
+    finalized = await finalizeConfirmedRetailOperatorOperation(organizationId, operation.id);
+  } catch (error) {
+    if (operation.status !== "CONFIRMED") throw error;
+    // The provider receipt remains confirmed while local posting can be retried.
+    return { mode: "CONNECTED" as const, operation, finalized: null, idempotent: pending.idempotent };
+  }
   return { mode: "CONNECTED" as const, operation, finalized, idempotent: pending.idempotent };
 }
 
@@ -362,9 +412,15 @@ export async function reconcileRetailProviderOperations(organizationId: string, 
   const operations = await prisma.enterpriseRetailProviderOperation.findMany({
     where: {
       organizationId,
-      sourceEntityType: { in: [PENDING_MOBILE_MONEY, PENDING_TELCO_TOPUP] },
-      status: { in: ["PENDING_PROVIDER", "UNKNOWN"] },
-      ...(operationId ? { id: operationId } : { OR: [{ nextRetryAt: { lte: now } }, { timeoutAt: { lte: now } }] }),
+      ...(operationId ? { id: operationId } : {}),
+      OR: [
+        {
+          sourceEntityType: { in: [PENDING_MOBILE_MONEY, PENDING_TELCO_TOPUP] },
+          status: { in: ["PENDING_PROVIDER", "UNKNOWN"] },
+          ...(operationId ? {} : { OR: [{ nextRetryAt: { lte: now } }, { timeoutAt: { lte: now } }] }),
+        },
+        { sourceEntityType: PENDING_MOBILE_MONEY, status: "CONFIRMED", ...(operationId ? {} : { nextRetryAt: { lte: now } }) },
+      ],
     },
     orderBy: { createdAt: "asc" },
     take: Math.min(100, Math.max(1, limit)),
@@ -373,6 +429,11 @@ export async function reconcileRetailProviderOperations(organizationId: string, 
   const results: Array<{ operationId: string; status: string; finalized: boolean; error?: string }> = [];
   for (const operation of operations) {
     try {
+      if (operation.status === "CONFIRMED") {
+        const finalized = await finalizeConnectedMobileMoney(organizationId, operation.id);
+        results.push({ operationId: operation.id, status: operation.status, finalized: Boolean(finalized) });
+        continue;
+      }
       const provider = await prisma.enterpriseRetailProvider.findFirst({
         where: { id: operation.providerId, organizationId, isActive: true },
         select: { id: true, providerCode: true, providerType: true, label: true },
@@ -428,6 +489,12 @@ export async function reconcileRetailProviderOperations(organizationId: string, 
       const finalized = await finalizeConfirmedRetailOperatorOperation(organizationId, updated.id);
       results.push({ operationId: operation.id, status: updated.status, finalized: Boolean(finalized) });
     } catch (error) {
+      if (operation.status === "CONFIRMED") {
+        await prisma.enterpriseRetailProviderOperation.updateMany({
+          where: { organizationId, id: operation.id, status: "CONFIRMED", sourceEntityType: PENDING_MOBILE_MONEY },
+          data: { nextRetryAt: new Date(Date.now() + providerRetryMs(null)) },
+        });
+      }
       if (operation.status === "PENDING_PROVIDER" && operation.timeoutAt && operation.timeoutAt <= now) {
         try {
           const unknown = await transitionRetailProviderOperation(organizationId, operation.id, {

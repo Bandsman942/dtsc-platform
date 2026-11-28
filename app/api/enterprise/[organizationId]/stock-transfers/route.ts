@@ -54,7 +54,14 @@ export async function GET(req: Request, { params }: Params) {
     ],
   };
   const [items, total, pending, completed] = await Promise.all([
-    prisma.enterpriseStockTransfer.findMany({ where, orderBy: [{ requestedAt: "desc" }], skip: (page - 1) * pageSize, take: pageSize, include: { sourceWarehouse: { select: { id: true, code: true, name: true } }, destinationWarehouse: { select: { id: true, code: true, name: true } }, lines: true } }),
+    prisma.enterpriseStockTransfer.findMany({
+      where, orderBy: [{ requestedAt: "desc" }, { id: "desc" }], skip: (page - 1) * pageSize, take: pageSize,
+      include: {
+        sourceWarehouse: { select: { id: true, code: true, name: true } },
+        destinationWarehouse: { select: { id: true, code: true, name: true } },
+        lines: { orderBy: [{ createdAt: "asc" }, { id: "asc" }], include: { inventoryItem: { select: { catalogItem: { select: { code: true, name: true } } } } } },
+      },
+    }),
     prisma.enterpriseStockTransfer.count({ where }),
     prisma.enterpriseStockTransfer.count({ where: { AND: [baseWhere, { status: "PENDING_APPROVAL" }] } }),
     prisma.enterpriseStockTransfer.count({ where: { AND: [baseWhere, { status: "COMPLETED" }] } }),

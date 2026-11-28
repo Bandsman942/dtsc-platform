@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
 import { retailReturnProductConditions, retailReturnStockDispositions } from "@/lib/enterprise/retail/commercial-schemas";
 
@@ -10,7 +11,7 @@ export const omnichannelReturnRequestSchema = z.object({
   lines: z.array(z.object({
     salesOrderItemId: id,
     quantity: z.coerce.number().finite().positive().max(1_000_000).refine(
-      (value) => Math.abs(value * 1000 - Math.round(value * 1000)) < 0.000001,
+      (value) => new Prisma.Decimal(value).decimalPlaces() <= 6,
     ),
     productCondition: z.enum(retailReturnProductConditions),
     stockDisposition: z.enum(retailReturnStockDispositions),

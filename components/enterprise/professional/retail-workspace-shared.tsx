@@ -57,6 +57,7 @@ export type CatalogItem = {
   indicativeCost: string | number | null;
   currency: string | null;
   trackInventory: boolean;
+  unitOfMeasure?: { name: string; symbol: string | null; decimalScale: number };
   inventoryItemId?: string | null;
   allowNegativeStock?: boolean;
   availableQuantity?: string | number | null;

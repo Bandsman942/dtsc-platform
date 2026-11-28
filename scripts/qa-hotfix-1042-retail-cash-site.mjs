@@ -84,7 +84,7 @@ assert.equal((await open()).openingAmount.toFixed(),"100");
 assert.equal(state.created.length,3);
 
 const financeCashList = fs.readFileSync("app/api/enterprise/[organizationId]/cash-sessions/route.ts", "utf8");
-assert.match(financeCashList, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "CLOSE_CASH"\)/);
+assert.match(financeCashList, /retailFinanceReadSiteScope\(organizationId, auth\.session\.userId, "CLOSE_CASH", tx\)/);
 assert.match(financeCashList, /siteId: \{ in: siteScope \}/);
 assert.match(financeCashList, /canClose: capabilities\.canManage && item\.cashierUserId === auth\.session\.userId/);
 const retailCashList = fs.readFileSync("app/api/enterprise/[organizationId]/retail/cash-sessions/route.ts", "utf8");

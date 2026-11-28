@@ -2055,10 +2055,10 @@ model HealthPharmacyProduct {
   strength                     String?
   unit                         String
   description                  String?
-  currentStock                 Decimal                       @default(0) @db.Decimal(14, 3)
-  minimumStock                 Decimal                       @default(0) @db.Decimal(14, 3)
-  criticalStock                Decimal?                      @db.Decimal(14, 3)
-  maximumStock                 Decimal?                      @db.Decimal(14, 3)
+  currentStock                 Decimal                       @default(0) @db.Decimal(17, 6)
+  minimumStock                 Decimal                       @default(0) @db.Decimal(17, 6)
+  criticalStock                Decimal?                      @db.Decimal(17, 6)
+  maximumStock                 Decimal?                      @db.Decimal(17, 6)
   trackBatches                 Boolean                       @default(true)
   trackExpiry                  Boolean                       @default(true)
   storageLocation              String?
@@ -2099,8 +2099,8 @@ model HealthPharmacyBatch {
   organizationId    String
   productId         String
   batchNumber       String
-  initialQuantity   Decimal                       @db.Decimal(14, 3)
-  availableQuantity Decimal                       @db.Decimal(14, 3)
+  initialQuantity   Decimal                       @db.Decimal(17, 6)
+  availableQuantity Decimal                       @db.Decimal(17, 6)
   manufacturingDate DateTime?
   expiryDate        DateTime?
   supplierReference String?
@@ -2130,9 +2130,9 @@ model HealthPharmacyStockMovement {
   productId             String
   batchId               String?
   movementType          String
-  quantity              Decimal                     @db.Decimal(14, 3)
-  stockBefore           Decimal                     @db.Decimal(14, 3)
-  stockAfter            Decimal                     @db.Decimal(14, 3)
+  quantity              Decimal                     @db.Decimal(17, 6)
+  stockBefore           Decimal                     @db.Decimal(17, 6)
+  stockAfter            Decimal                     @db.Decimal(17, 6)
   movementDate          DateTime                    @default(now())
   source                String?
   destination           String?
@@ -2174,7 +2174,7 @@ model HealthPharmacyDispensation {
   consultationId      String?
   productId           String
   batchId             String?
-  quantity            Decimal                     @db.Decimal(14, 3)
+  quantity            Decimal                     @db.Decimal(17, 6)
   dispensedById       String
   dispensedAt         DateTime                    @default(now())
   prescriberId        String?
@@ -2298,7 +2298,7 @@ model HealthMedicalInvoiceItem {
   itemType                     String
   serviceCatalogId             String?
   description                  String
-  quantity                     Decimal                      @db.Decimal(14, 3)
+  quantity                     Decimal                      @db.Decimal(17, 6)
   unitPrice                    Decimal                      @db.Decimal(14, 2)
   discountAmount               Decimal                      @default(0) @db.Decimal(14, 2)
   totalAmount                  Decimal                      @db.Decimal(14, 2)
@@ -2915,12 +2915,12 @@ model PharmacyProduct {
   genericSubstitutionAllowed   Boolean                   @default(false)
   saleWarningMessage           String?
   stockTrackingEnabled         Boolean                   @default(true)
-  minStock                     Decimal                   @default(0) @db.Decimal(14, 3)
-  maxStock                     Decimal?                  @db.Decimal(14, 3)
-  safetyStock                  Decimal?                  @db.Decimal(14, 3)
+  minStock                     Decimal                   @default(0) @db.Decimal(17, 6)
+  maxStock                     Decimal?                  @db.Decimal(17, 6)
+  safetyStock                  Decimal?                  @db.Decimal(17, 6)
   defaultLocation              String?
   shelf                        String?
-  unitsPerPackage              Decimal?                  @db.Decimal(14, 3)
+  unitsPerPackage              Decimal?                  @db.Decimal(17, 6)
   storageType                  String?
   tempMin                      Decimal?                  @db.Decimal(8, 2)
   tempMax                      Decimal?                  @db.Decimal(8, 2)
@@ -2975,12 +2975,12 @@ model PharmacyBatch {
   receivedAt            DateTime?
   stockEntryDate        DateTime?
   receivedById          String?
-  receivedQuantity      Decimal                   @db.Decimal(14, 3)
-  availableQuantity     Decimal                   @db.Decimal(14, 3)
-  reservedQuantity      Decimal                   @default(0) @db.Decimal(14, 3)
-  damagedQuantity       Decimal                   @default(0) @db.Decimal(14, 3)
+  receivedQuantity      Decimal                   @db.Decimal(17, 6)
+  availableQuantity     Decimal                   @db.Decimal(17, 6)
+  reservedQuantity      Decimal                   @default(0) @db.Decimal(17, 6)
+  damagedQuantity       Decimal                   @default(0) @db.Decimal(17, 6)
   unit                  String
-  minQuantityAlert      Decimal?                  @db.Decimal(14, 3)
+  minQuantityAlert      Decimal?                  @db.Decimal(17, 6)
   expiryAlertDays       Int?
   location              String?
   shelf                 String?
@@ -3039,9 +3039,9 @@ model PharmacyStockMovement {
   batchId           String?
   movementType      String
   direction         String          @default("NEUTRAL")
-  quantity          Decimal         @db.Decimal(14, 3)
-  quantityBefore    Decimal?        @db.Decimal(14, 3)
-  quantityAfter     Decimal?        @db.Decimal(14, 3)
+  quantity          Decimal         @db.Decimal(17, 6)
+  quantityBefore    Decimal?        @db.Decimal(17, 6)
+  quantityAfter     Decimal?        @db.Decimal(17, 6)
   reason            String
   relatedEntityType String?
   relatedEntityId   String?
@@ -3101,9 +3101,9 @@ model PharmacyInventoryLine {
   productId          String
   batchId            String?
   locationId         String?
-  systemQuantity     Decimal                   @db.Decimal(14, 3)
-  countedQuantity    Decimal?                  @db.Decimal(14, 3)
-  variance           Decimal?                  @db.Decimal(14, 3)
+  systemQuantity     Decimal                   @db.Decimal(17, 6)
+  countedQuantity    Decimal?                  @db.Decimal(17, 6)
+  variance           Decimal?                  @db.Decimal(17, 6)
   varianceType       String?
   varianceReason     String?
   countedById        String?
@@ -3134,7 +3134,7 @@ model PharmacyStockAdjustment {
   inventoryLineId    String?
   adjustmentType     String
   direction          String
-  quantity           Decimal                   @db.Decimal(14, 3)
+  quantity           Decimal                   @db.Decimal(17, 6)
   reason             String
   status             String                    @default("DRAFT")
   requestedById      String
@@ -3242,7 +3242,7 @@ model PharmacySupplierProduct {
   supplierReference String?
   supplierPrice     Decimal?         @db.Decimal(14, 2)
   deliveryDays      Int?
-  minimumQuantity   Decimal?         @db.Decimal(14, 3)
+  minimumQuantity   Decimal?         @db.Decimal(17, 6)
   status            String           @default("ACTIVE")
   notes             String?
   createdAt         DateTime         @default(now())
@@ -3258,7 +3258,7 @@ model PharmacyReplenishmentRequest {
   organizationId      String
   requestNumber       String
   productId           String
-  requestedQuantity   Decimal           @db.Decimal(14, 3)
+  requestedQuantity   Decimal           @db.Decimal(17, 6)
   unit                String
   source              String
   reason              String
@@ -3336,9 +3336,9 @@ model PharmacyPurchaseOrderLine {
   purchaseOrderId    String
   productId          String
   supplierProductId  String?
-  orderedQuantity    Decimal               @db.Decimal(14, 3)
-  receivedQuantity   Decimal               @default(0) @db.Decimal(14, 3)
-  remainingQuantity  Decimal               @db.Decimal(14, 3)
+  orderedQuantity    Decimal               @db.Decimal(17, 6)
+  receivedQuantity   Decimal               @default(0) @db.Decimal(17, 6)
+  remainingQuantity  Decimal               @db.Decimal(17, 6)
   unit               String
   estimatedUnitPrice Decimal?              @db.Decimal(14, 2)
   discountRate       Decimal?              @db.Decimal(8, 2)
@@ -3420,7 +3420,7 @@ model PharmacyReceipt {
   baseCurrency             String                       @default("USD")
   exchangeRateToBase       Decimal                      @default(1) @db.Decimal(18, 6)
   totalAmountBase          Decimal?                     @db.Decimal(14, 2)
-  totalItems               Decimal?                     @db.Decimal(14, 3)
+  totalItems               Decimal?                     @db.Decimal(17, 6)
   status                   String                       @default("DRAFT")
   submittedById            String?
   submittedAt              DateTime?
@@ -3455,9 +3455,9 @@ model PharmacyReceiptLine {
   receiptId                  String
   productId                  String
   purchaseOrderLineId        String?
-  orderedQuantity            Decimal?                     @db.Decimal(14, 3)
-  previouslyReceivedQuantity Decimal?                     @db.Decimal(14, 3)
-  receivedQuantity           Decimal                      @db.Decimal(14, 3)
+  orderedQuantity            Decimal?                     @db.Decimal(17, 6)
+  previouslyReceivedQuantity Decimal?                     @db.Decimal(17, 6)
+  receivedQuantity           Decimal                      @db.Decimal(17, 6)
   unit                       String
   purchasePrice              Decimal?                     @db.Decimal(14, 2)
   supplierDiscount           Decimal?                     @db.Decimal(8, 2)
@@ -3486,7 +3486,7 @@ model PharmacyReceiptBatch {
   manufacturingDate DateTime?
   expiryDate        DateTime
   barcode           String?
-  receivedQuantity  Decimal                      @db.Decimal(14, 3)
+  receivedQuantity  Decimal                      @db.Decimal(17, 6)
   locationId        String?
   initialStatus     String                       @default("ACTIVE")
   notes             String?
@@ -3514,7 +3514,7 @@ model PharmacyReceiptDiscrepancy {
   batchId           String?
   discrepancyType   String
   description       String
-  affectedQuantity  Decimal?              @db.Decimal(14, 3)
+  affectedQuantity  Decimal?              @db.Decimal(17, 6)
   criticality       String                @default("MEDIUM")
   responsibleUserId String?
   status            String                @default("OPEN")
@@ -3627,9 +3627,9 @@ model PharmacyPrescriptionLine {
   substitutionReason    String?
   dosage                String?
   pharmaceuticalForm    String?
-  prescribedQuantity    Decimal?             @db.Decimal(14, 3)
+  prescribedQuantity    Decimal?             @db.Decimal(17, 6)
   prescribedUnit        String?
-  dispensedQuantity     Decimal              @default(0) @db.Decimal(14, 3)
+  dispensedQuantity     Decimal              @default(0) @db.Decimal(17, 6)
   frequency             String?
   duration              String?
   administrationRoute   String?
@@ -3760,7 +3760,7 @@ model PharmacySaleLine {
   saleId                       String
   productId                    String
   batchId                      String
-  quantity                     Decimal                  @db.Decimal(14, 3)
+  quantity                     Decimal                  @db.Decimal(17, 6)
   unit                         String
   unitPrice                    Decimal                  @db.Decimal(14, 2)
   lineDiscount                 Decimal?                 @db.Decimal(8, 2)
@@ -3816,7 +3816,7 @@ model PharmacySaleRefundLine {
   saleLineId       String
   productId        String
   batchId          String
-  quantityReturned Decimal            @db.Decimal(14, 3)
+  quantityReturned Decimal            @db.Decimal(17, 6)
   restocked        Boolean            @default(false)
   itemCondition    String?
   notes            String?
@@ -4075,7 +4075,7 @@ model PharmacyReturnLossEvent {
   productId          String
   batchId            String?
   targetLocationId   String?
-  quantity           Decimal                      @db.Decimal(14, 3)
+  quantity           Decimal                      @db.Decimal(17, 6)
   unit               String
   direction          String
   itemCondition      String?
@@ -4311,7 +4311,7 @@ model PharmacyQualityIncident {
   alertId                 String?
   customerPatientName     String?
   customerPatientContact  String?
-  quantityAffected        Decimal?                        @db.Decimal(14, 3)
+  quantityAffected        Decimal?                        @db.Decimal(17, 6)
   unit                    String?
   productCondition        String?
   productStillAvailable   Boolean                         @default(false)

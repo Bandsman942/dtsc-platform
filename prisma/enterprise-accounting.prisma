@@ -444,7 +444,7 @@ model EnterpriseSalesInvoiceItem {
   salesInvoiceId     String
   catalogItemId      String?
   description        String
-  quantity           Decimal                @db.Decimal(20, 6)
+  quantity           Decimal                @db.Decimal(21, 6)
   unitPrice          Decimal                @db.Decimal(20, 6)
   discountAmount     Decimal                @default(0) @db.Decimal(20, 6)
   netAmount          Decimal                @db.Decimal(20, 6)
@@ -503,7 +503,7 @@ model EnterpriseSalesCreditNoteItem {
   sourceInvoiceItemId String?
   taxBreakdownJson   Json?
   description        String
-  quantity           Decimal                   @db.Decimal(20, 6)
+  quantity           Decimal                   @db.Decimal(21, 6)
   unitPrice          Decimal                   @db.Decimal(20, 6)
   netAmount          Decimal                   @db.Decimal(20, 6)
   taxAmount          Decimal                   @default(0) @db.Decimal(20, 6)
@@ -612,7 +612,7 @@ model EnterpriseSupplierInvoiceItem {
   supplierInvoiceId       String
   catalogItemId           String?
   description             String
-  quantity                Decimal                   @db.Decimal(20, 6)
+  quantity                Decimal                   @db.Decimal(21, 6)
   unitPrice               Decimal                   @db.Decimal(20, 6)
   netAmount               Decimal                   @db.Decimal(20, 6)
   taxCodeId               String?
@@ -720,7 +720,7 @@ model EnterpriseThreeWayMatch {
   supplierInvoiceId     String   @unique
   purchaseId            String?
   purchaseReceiptId     String?
-  quantityVariance      Decimal  @default(0) @db.Decimal(20, 6)
+  quantityVariance      Decimal  @default(0) @db.Decimal(21, 6)
   priceVariance         Decimal  @default(0) @db.Decimal(20, 6)
   taxVariance           Decimal  @default(0) @db.Decimal(20, 6)
   currencyMatches       Boolean  @default(true)
@@ -1330,8 +1330,8 @@ model EnterpriseInventoryCostLayer {
   warehouseId           String?
   sourceMovementId      String
   valuationMethod       String
-  quantity              Decimal  @db.Decimal(20, 6)
-  remainingQuantity     Decimal  @db.Decimal(20, 6)
+  quantity              Decimal  @db.Decimal(21, 6)
+  remainingQuantity     Decimal  @db.Decimal(21, 6)
   unitCost              Decimal  @db.Decimal(20, 6)
   totalCost             Decimal  @db.Decimal(20, 6)
   currencyCode          String
@@ -1353,7 +1353,7 @@ model EnterpriseInventoryAccountingEvent {
   inventoryItemId     String
   stockMovementId     String
   eventType           String
-  quantity            Decimal  @db.Decimal(20, 6)
+  quantity            Decimal  @db.Decimal(21, 6)
   unitCost            Decimal  @db.Decimal(20, 6)
   totalCost           Decimal  @db.Decimal(20, 6)
   currencyCode        String
@@ -1381,7 +1381,7 @@ model EnterpriseInventoryAcquisitionCostSupplement {
   receiptAccountingEventId String
   taxLineId             String
   invoiceJournalEntryId String
-  quantity              Decimal  @db.Decimal(20, 6)
+  quantity              Decimal  @db.Decimal(21, 6)
   originalUnitCost      Decimal  @db.Decimal(20, 6)
   originalTotalCost     Decimal  @db.Decimal(20, 6)
   capitalizedTaxAmount  Decimal  @db.Decimal(20, 6)
@@ -1612,15 +1612,15 @@ model EnterpriseInventoryTransferValuation {
   dispatchJournalEntryId String?
   receiptJournalEntryId  String?
   currencyCode           String
-  quantity               Decimal  @db.Decimal(20, 6)
+  quantity               Decimal  @db.Decimal(21, 6)
   unitCost               Decimal  @db.Decimal(20, 6)
   totalCost              Decimal  @db.Decimal(20, 6)
-  sourceQuantityBefore   Decimal  @db.Decimal(20, 6)
-  sourceQuantityAfter    Decimal  @db.Decimal(20, 6)
+  sourceQuantityBefore   Decimal  @db.Decimal(21, 6)
+  sourceQuantityAfter    Decimal  @db.Decimal(21, 6)
   sourceValueBefore      Decimal  @db.Decimal(20, 6)
   sourceValueAfter       Decimal  @db.Decimal(20, 6)
-  destinationQuantityBefore Decimal? @db.Decimal(20, 6)
-  destinationQuantityAfter  Decimal? @db.Decimal(20, 6)
+  destinationQuantityBefore Decimal? @db.Decimal(21, 6)
+  destinationQuantityAfter  Decimal? @db.Decimal(21, 6)
   destinationValueBefore Decimal? @db.Decimal(20, 6)
   destinationValueAfter  Decimal? @db.Decimal(20, 6)
   status                 String   @default("PREPARED")
@@ -1657,9 +1657,9 @@ model EnterpriseInventoryTransferCostAllocation {
   organizationId       String
   valuationId          String
   sourceCostLayerId    String
-  quantityBefore       Decimal  @db.Decimal(20, 6)
-  remainingQuantity    Decimal  @db.Decimal(20, 6)
-  transferredQuantity  Decimal  @db.Decimal(20, 6)
+  quantityBefore       Decimal  @db.Decimal(21, 6)
+  remainingQuantity    Decimal  @db.Decimal(21, 6)
+  transferredQuantity  Decimal  @db.Decimal(21, 6)
   unitCost             Decimal  @db.Decimal(20, 6)
   createdAt            DateTime @default(now())
 

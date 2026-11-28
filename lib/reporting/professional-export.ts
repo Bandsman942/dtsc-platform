@@ -36,6 +36,8 @@ export type ProfessionalReportExportModel = {
   insights: ProfessionalReportInsight[];
   filters?: Array<{ label: string; value: string }>;
   accentHex?: string;
+  /** Opt-in for analytical exports only. Import templates keep their flat schema. */
+  includeCompleteSummary?: boolean;
 };
 
 const textEncoder = new TextEncoder();
@@ -68,6 +70,11 @@ export function downloadProfessionalCsv(model: ProfessionalReportExportModel) {
     model.columns.map((column) => csvCell(column.label)).join(","),
     ...model.rows.map((row) => model.columns.map((column) => csvCell(row[column.key])).join(",")),
   ];
+  if (model.includeCompleteSummary) {
+    const width = Math.max(2, model.columns.length);
+    const line = (label: string, value: string) => [label, value, ...Array.from({ length: width - 2 }, () => "")].map(csvCell).join(",");
+    lines.push(line("", ""), line(model.organizationName || "", model.title), line(model.generatedLabel || "", ""), ...model.kpis.map(item => line(item.label, item.value)), ...(model.filters || []).map(item => line(item.label, item.value)));
+  }
   triggerDownload(new Blob(["\ufeff", lines.join("\r\n")], { type: "text/csv;charset=utf-8" }), `${safeFileName(model.filenameBase)}.csv`);
 }
 
@@ -221,7 +228,27 @@ function winAnsi(value: string) {
 }
 
 function pdfEscape(value: string) {
-  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[\r\n]+/g, " ");
+  return value.replace(/\\/g, "\\\\").replace(/\(/g, "\\(").replace(/\)/g, "\\)").replace(/[\r\n]+/g, " ").replace(/\u202f/g, "\u00a0");
+}
+
+function pdfTableCell(value: unknown, width: number) {
+  const content = String(value ?? "").replace(/[\r\n\t]+/g, " ");
+  if (/^-?\d+(?:\.\d+)?$/.test(content)) {
+    // Helvetica's tabular digits are 556 units wide out of 1,000.
+    const size = Math.min(7, Math.floor(width / (content.length * 0.556) * 10) / 10);
+    if (size >= 5.5) return { lines: [content], size };
+  }
+  const max = Math.max(1, Math.floor(width / 4.6));
+  const lines: string[] = [];
+  let rest = content;
+  while (rest.length > max) {
+    const space = rest.lastIndexOf(" ", max);
+    const end = space > 0 ? space : max;
+    lines.push(rest.slice(0, end));
+    rest = rest.slice(end).trimStart();
+  }
+  lines.push(rest);
+  return { lines, size: 7 };
 }
 
 function hexRgb(hex: string) {
@@ -254,7 +281,19 @@ function pdfDocument(model: ProfessionalReportExportModel) {
   };
   startPage();
   if (model.generatedLabel) { text(36, y, 8, cut(model.generatedLabel, 110)); y -= 20; }
-  if (model.kpis.length) {
+  if (model.includeCompleteSummary && model.kpis.length) {
+    text(36, y, 10, "Synthèse / Summary", true);
+    y -= 20;
+    for (const item of model.kpis) {
+      if (y < 100) startPage();
+      // Separate label and value to preserve currency, status and metric.
+      text(40, y, 8, cut(item.label, 108), true);
+      y -= 13;
+      text(40, y, 10, cut(item.value, 80));
+      y -= 20;
+    }
+    y -= 10;
+  } else if (model.kpis.length) {
     model.kpis.slice(0, 4).forEach((item, index) => {
       const x = 36 + index * 132;
       commands.push("0.94 0.97 0.99 rg", `${x} ${y - 47} 125 50 re f`);
@@ -266,7 +305,8 @@ function pdfDocument(model: ProfessionalReportExportModel) {
   if (model.filters?.length) {
     text(36, y, 9, "Périmètre et critères de sélection", true);
     y -= 17;
-    for (const filter of model.filters.slice(0, 6)) {
+    for (const filter of (model.includeCompleteSummary ? model.filters : model.filters.slice(0, 6))) {
+      if (y < 90) startPage();
       text(40, y, 8, cut(`${filter.label}: ${filter.value}`, 110));
       y -= 15;
     }
@@ -309,20 +349,38 @@ function pdfDocument(model: ProfessionalReportExportModel) {
       if (groupIndex > 0 || y < 120) startPage();
       const width = 523 / columns.length;
       const renderHeader = () => {
-        commands.push(`${accent} rg 36 ${y - 19} 523 25 re f`);
-        columns.forEach((column, index) => {
-          commands.push(`1 1 1 rg BT /F2 7 Tf ${40 + index * width} ${y - 10} Td (${pdfEscape(cut(column.label, Math.max(8, Math.floor(width / 4.3))))}) Tj ET`);
+        const headers = columns.map(column => pdfTableCell(column.label, width - 8));
+        const height = 14 + 9 * Math.max(...headers.map(header => header.lines.length));
+        commands.push(`${accent} rg 36 ${y - height} 523 ${height + 6} re f`);
+        headers.forEach((header, index) => {
+          header.lines.forEach((line, lineIndex) => {
+            commands.push(`1 1 1 rg BT /F2 7 Tf ${40 + index * width} ${y - 7 - lineIndex * 9} Td (${pdfEscape(line)}) Tj ET`);
+          });
         });
-        y -= 28;
+        y -= height + 8;
       };
       text(36, y, 10, groupIndex === 0 ? "Registre détaillé" : `Registre détaillé — suite ${groupIndex + 1}/${columnGroups.length}`, true);
       y -= 21;
       renderHeader();
       for (let rowIndex = 0; rowIndex < model.rows.length; rowIndex += 1) {
-        if (y < 70) { startPage(); renderHeader(); }
-        if (rowIndex % 2 === 0) commands.push("0.95 0.97 0.98 rg", `36 ${y - 8} 523 19 re f`);
-        columns.forEach((column, index) => text(40 + index * width, y, 7, cut(model.rows[rowIndex][column.key], Math.max(7, Math.floor(width / 3.85)))));
-        y -= 19;
+        const cells = columns.map(column => pdfTableCell(model.rows[rowIndex][column.key], width - 8));
+        const lineCount = Math.max(...cells.map(cell => cell.lines.length));
+        // Keep ordinary rows together and repeat the header if an unusually
+        // long cell continues onto the next page.
+        if (y < 64 + Math.min(lineCount, 5) * 9) { startPage(); renderHeader(); }
+        for (let firstLine = 0; firstLine < lineCount;) {
+          const shown = Math.min(lineCount - firstLine, Math.max(1, Math.floor((y - 64) / 9)));
+          const height = 10 + shown * 9;
+          if (rowIndex % 2 === 0) commands.push("0.95 0.97 0.98 rg", `36 ${y + 10 - height} 523 ${height} re f`);
+          cells.forEach((cell, index) => {
+            cell.lines.slice(firstLine, firstLine + shown).forEach((line, lineIndex) => {
+              text(40 + index * width, y - 9 * lineIndex, cell.size, line);
+            });
+          });
+          y -= height;
+          firstLine += shown;
+          if (firstLine < lineCount) { startPage(); renderHeader(); }
+        }
       }
     }
   }

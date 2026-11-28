@@ -393,7 +393,7 @@ export async function decideRetailReturn(
           stockLotId: source.stockLotId,
           movementType: "RETURN_IN",
           direction: "IN",
-          quantity: Number(line.quantity),
+          quantity: line.quantity.toFixed(),
           sourceEntityType: "EnterpriseRetailSale",
           sourceEntityId: retailReturn.sale.id,
           sourceLineId: source.id,

@@ -8,6 +8,7 @@ import { cn } from "@/lib/utils";
 
 type ToastItem = Required<Pick<ToastPayload, "description" | "tone">> & {
   id: string;
+  locale: "fr" | "en";
   title?: string;
   durationMs: number;
   createdAt: number;
@@ -64,7 +65,6 @@ function toastId() {
 
 export function ToastProvider() {
   const locale = useAppLocale() === "en" ? "en" : "fr";
-  const copy = toastCopy[locale];
   const [toasts, setToasts] = useState<ToastItem[]>([]);
 
   const dismiss = useCallback((id: string) => {
@@ -83,6 +83,7 @@ export function ToastProvider() {
       const durationMs = detail.durationMs || (tone === "error" ? 7000 : 4600);
       const item: ToastItem = {
         id: toastId(),
+        locale: document.documentElement.lang === "en" ? "en" : document.documentElement.lang === "fr" ? "fr" : locale,
         title: detail.title,
         description,
         tone,
@@ -95,6 +96,7 @@ export function ToastProvider() {
       // later submission merely because its text matches an older one.
       setToasts((current) => current.some((existing) =>
         existing.tone === item.tone &&
+        existing.locale === item.locale &&
         existing.title === item.title &&
         existing.description === item.description &&
         Math.abs(item.createdAt - existing.createdAt) < 120
@@ -103,7 +105,7 @@ export function ToastProvider() {
 
     window.addEventListener(DTSC_TOAST_EVENT, handleToast);
     return () => window.removeEventListener(DTSC_TOAST_EVENT, handleToast);
-  }, []);
+  }, [locale]);
 
   useEffect(() => {
     if (!toasts.length) {
@@ -125,6 +127,7 @@ export function ToastProvider() {
     >
       {renderedToasts.map((toast) => {
         const config = toneConfig[toast.tone];
+        const copy = toastCopy[toast.locale];
         const Icon = config.icon;
         return (
           <div

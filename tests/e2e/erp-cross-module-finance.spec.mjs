@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -119,6 +120,13 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     expect(created.response.ok(), JSON.stringify(created.body)).toBeTruthy();
     const createdAccountId = created.body?.account?.id;
     expect(createdAccountId, "Treasury E2E account creation must return the created account id").toBeTruthy();
+    await prisma.$transaction([
+      prisma.enterpriseFinancialAccount.update({ where: { id: createdAccountId }, data: { operationalBalance: "12.000001" } }),
+      prisma.enterpriseTreasuryTransaction.create({ data: {
+        organizationId, financialAccountId: createdAccountId, currencyCode: currency.code, transactionType: "FUNDING",
+        direction: "INBOUND", amount: "12.000001", transactionDate: new Date(), reference: accountName, createdByUserId: adminUserId,
+      } }),
+    ]);
 
     const pageErrors = [];
     const capturePageError = (error) => pageErrors.push(error.message);
@@ -147,6 +155,37 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       await expect(historyTab).toHaveAttribute("aria-pressed", "true");
       await expect(authenticatedPage.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
 
+      await authenticatedPage.getByRole("textbox", { name: /^(Rechercher Compte|Search Account)$/i }).fill(accountName);
+      await authenticatedPage.locator('select[name="historyAccountId"]').selectOption(createdAccountId);
+      const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
+      const orgDate = new Intl.DateTimeFormat("sv-SE", { timeZone: organization.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const balanceResponse = authenticatedPage.waitForResponse((response) => {
+        if (!response.url().includes("/treasury-history?")) return false;
+        const params = new URL(response.url()).searchParams;
+        return params.get("accountId") === createdAccountId && params.get("to") === orgDate;
+      });
+      await authenticatedPage.getByRole("combobox", { name: /Choisir un filtre de date|Choose date filter/i }).selectOption("exact");
+      await authenticatedPage.getByLabel(/Calendrier de la date de début|Start date calendar/i).fill(orgDate);
+      const snapshot = (await (await balanceResponse).json()).metrics.treasuryBalanceAt;
+      expect(snapshot).toMatchObject({ accountId: createdAccountId, currencyCode: currency.code, amount: "12.000001", status: "AVAILABLE" });
+      await expect(authenticatedPage.getByText(/Solde opérationnel au|Operating balance as of/i)).toBeVisible();
+      async function downloadHistory(format) {
+        const downloaded = authenticatedPage.waitForEvent("download");
+        await authenticatedPage.getByRole("button", { name: format, exact: true }).click();
+        const file = await downloaded;
+        expect(await file.failure()).toBeNull();
+        return readFile(await file.path());
+      }
+      const balanceLine = /(?:Solde opérationnel au|Operating balance as of)[^\r\n]*12[,.]000001/i;
+      const csv = (await downloadHistory("CSV")).toString("utf8");
+      expect(csv).toMatch(balanceLine);
+      const excel = await downloadHistory("Excel");
+      expect(excel.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+      expect(excel.toString("utf8")).toMatch(balanceLine);
+      const pdf = (await downloadHistory("PDF")).toString("latin1");
+      expect(pdf.slice(0, 5)).toBe("%PDF-");
+      expect(pdf).toMatch(/(?:Solde opérationnel au|Operating balance as of)[\s\S]{0,300}12[,.]000001/i);
+
       await transfersTab.click();
       await expect(transfersTab).toHaveAttribute("aria-pressed", "true");
       const secondHistoryResponse = authenticatedPage.waitForResponse((response) => response.url().includes("/treasury-history?") && response.request().method() === "GET");
@@ -157,6 +196,60 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       expect(pageErrors).toEqual([]);
     } finally {
       authenticatedPage.off("pageerror", capturePageError);
+    }
+  });
+
+  test("Asset register shows and exports the exact acquisition cost and net value", async () => {
+    await enableModule("FINANCE_ASSETS");
+    const code = `E2E-1229-ASSET-${Date.now()}`;
+    const amount = "12345678900000.123456";
+    const configuration = await prisma.enterpriseFinanceConfiguration.findUniqueOrThrow({ where: { organizationId } });
+    const currencyCode = configuration.functionalCurrencyCode;
+    const journal = await prisma.enterpriseJournal.findFirstOrThrow({ where: { organizationId, isActive: true } });
+    const period = await prisma.enterpriseFiscalPeriod.findFirstOrThrow({ where: { organizationId } });
+    const account = await prisma.enterpriseLedgerAccount.findFirstOrThrow({ where: { organizationId, accountType: "ASSET" } });
+    const fixture = await prisma.$transaction(async tx => {
+      const asset = await tx.enterpriseAsset.create({ data: { organizationId, code, name: code, createdByUserId: adminUserId } });
+      const profile = await tx.enterpriseAssetAccountingProfile.create({ data: {
+        organizationId, assetId: asset.id, capitalizationSourceType: "OPERATIONAL_ASSET", originalCost: amount,
+        inServiceDate: period.startDate, usefulLifeMonths: 12, currencyCode,
+        assetAccountId: account.id, accumulatedDepreciationAccountId: account.id, depreciationExpenseAccountId: account.id,
+      } });
+      const entry = await tx.enterpriseJournalEntry.create({ data: {
+        organizationId, number: code, reference: code, description: "Asset export fixture", fiscalPeriodId: period.id, journalId: journal.id,
+        accountingDate: period.startDate, status: "POSTED", postedAt: period.startDate, preparedByUserId: adminUserId, postedByUserId: adminUserId,
+        functionalCurrencyCode: currencyCode, sourceModule: "FINANCE_ASSETS", postingEvent: "ASSET_CAPITALIZED",
+        sourceEntityType: "EnterpriseAssetAccountingProfile", sourceEntityId: profile.id, totalDebit: amount, totalCredit: amount,
+      } });
+      return { assetId: asset.id, profileId: profile.id, entryId: entry.id };
+    });
+    try {
+      await authenticatedPage.goto(`${baseUrl}/enterprise-modules/FINANCE_ASSETS`);
+      const search = authenticatedPage.getByPlaceholder(/Rechercher sans identifiant technique|Search without technical identifiers/i);
+      const ready = authenticatedPage.waitForResponse(response =>
+        response.url().includes("/asset-accounting?") && new URL(response.url()).searchParams.get("search") === code);
+      await search.fill(code);
+      const result = await (await ready).json();
+      expect(result.filteredTotals).toContainEqual({ currencyCode, status: "ACTIVE", metric: "assetNetBookValue", amount });
+      const exact = /12\D345\D678\D900\D000[,.]123456/;
+      await expect(authenticatedPage.getByText(/Sous-totaux filtrés \(toutes pages\)|Filtered subtotals \(all pages\)/).first()).toBeVisible();
+      await expect(authenticatedPage.getByText(exact).first()).toBeVisible();
+      for (const format of ["CSV", "Excel", "PDF"]) {
+        const download = authenticatedPage.waitForEvent("download");
+        await authenticatedPage.getByRole("button", { name: format, exact: true }).click();
+        const file = await download;
+        expect(await file.failure()).toBeNull();
+        const content = await readFile(await file.path(), format === "PDF" ? "latin1" : "utf8");
+        expect(content).toContain(code);
+        expect(content).toContain(amount);
+        expect(content).toMatch(/Valeur nette comptable|Net book value/);
+      }
+    } finally {
+      await prisma.$transaction([
+        prisma.enterpriseJournalEntry.delete({ where: { id: fixture.entryId } }),
+        prisma.enterpriseAssetAccountingProfile.delete({ where: { id: fixture.profileId } }),
+        prisma.enterpriseAsset.delete({ where: { id: fixture.assetId } }),
+      ]);
     }
   });
 

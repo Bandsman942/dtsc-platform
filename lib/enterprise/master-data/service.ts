@@ -7,6 +7,7 @@ import { synchronizeLinkedPersonIdentityTx } from "@/lib/enterprise/identity-lin
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import type {
   businessPartyCreateSchema,
   businessPartyUpdateSchema,
@@ -156,12 +157,15 @@ export async function createEnterpriseCatalogItemTx(tx: Prisma.TransactionClient
     if (!input.trackInventory && (input.expiryTracking || input.lotTracking || input.initialLot)) throw new EnterpriseDomainError("CATALOG_LOT_REQUIRES_INVENTORY", 400);
     if (input.initialLot && input.expiryTracking && !input.initialLot.expiryDate) throw new EnterpriseDomainError("STOCK_EXPIRY_DATE_REQUIRED", 400);
     const [unit, category] = await Promise.all([
-      tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
+      tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, decimalScale: true } }),
       input.categoryId
         ? tx.enterpriseCatalogCategory.findFirst({ where: { id: input.categoryId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } })
         : Promise.resolve(null),
     ]);
     if (!unit) throw new Error("UNIT_OF_MEASURE_NOT_FOUND");
+    for (const amount of [input.minimumQuantity, input.reorderQuantity]) {
+      if (amount != null) requireInventoryQuantity(amount, unit.decimalScale);
+    }
     if (input.categoryId && !category) throw new Error("CATALOG_CATEGORY_NOT_FOUND");
     const item = await tx.enterpriseCatalogItem.create({
       data: {
@@ -526,9 +530,12 @@ export async function updateEnterpriseCatalogItem(organizationId: string, itemId
     const existing = await tx.enterpriseCatalogItem.findFirst({ where: { id: itemId, organizationId, archivedAt: null } });
     if (!existing) throw new Error("CATALOG_ITEM_NOT_FOUND");
     if ((input.trackInventory ?? existing.trackInventory) === false && (input.expiryTracking || input.lotTracking || input.initialLot)) throw new EnterpriseDomainError("CATALOG_LOT_REQUIRES_INVENTORY", 400);
-    if (input.unitOfMeasureId) {
-      const unit = await tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
+    if (input.unitOfMeasureId || input.minimumQuantity != null || input.reorderQuantity != null) {
+      const unit = await tx.enterpriseUnitOfMeasure.findFirst({ where: { id: input.unitOfMeasureId || existing.unitOfMeasureId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true, decimalScale: true } });
       if (!unit) throw new Error("UNIT_OF_MEASURE_NOT_FOUND");
+      for (const amount of [input.minimumQuantity, input.reorderQuantity]) {
+        if (amount != null) requireInventoryQuantity(amount, unit.decimalScale);
+      }
     }
     if (input.categoryId) {
       const category = await tx.enterpriseCatalogCategory.findFirst({ where: { id: input.categoryId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } });

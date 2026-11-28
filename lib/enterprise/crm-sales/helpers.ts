@@ -11,10 +11,6 @@ export function normalizeEnterpriseName(value: string) {
   return value.trim().replace(/\s+/g, " ").toLocaleLowerCase("fr");
 }
 
-export function roundMoney(value: number) {
-  return Math.round((value + Number.EPSILON) * 100) / 100;
-}
-
 export async function assertActiveClientOrganization(tx: Prisma.TransactionClient, organizationId: string) {
   const organization = await tx.organization.findFirst({
     where: { id: organizationId, status: "ACTIVE", deletedAt: null, organizationType: "CLIENT" },

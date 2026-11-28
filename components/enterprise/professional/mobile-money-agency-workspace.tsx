@@ -1,6 +1,11 @@
 "use client";
 
 import Link from "next/link";
+import { CommercialDesign2Controls } from "@/components/enterprise/professional/commercial-design2-controls";
+import { FinanceAmountScopes, formatAnalyticsAmount, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
+import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
+import { inventoryQuantityExportValue as exactDecimalExportValue } from "@/lib/enterprise/inventory/quantity-display";
 import { useCallback, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from "react";
 import { ArrowRightLeft, CheckCircle2, RefreshCw, RotateCcw, Settings2, Smartphone, WalletCards } from "lucide-react";
 import { useAppLocale } from "@/components/i18n/locale-provider";
@@ -17,6 +22,7 @@ import {
   normalizePhonePreview,
   providerLabel,
   statusTone,
+  type MobileMoneyOperation,
   type RetailDashboard,
   type RetailMutation,
 } from "@/components/enterprise/professional/retail-workspace-shared";
@@ -33,7 +39,7 @@ import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError, customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { customerFacingFeeCollectionMode, customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
-import { translateRetailWorkspace } from "@/lib/i18n";
+import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
 type CurrencyAccount = {
   id: string;
@@ -59,6 +65,7 @@ type ProviderConfiguration = {
   providerType: string;
   executionMode?: "MANUAL" | "CONNECTED";
   accounts: ProviderMapping[];
+  operationCurrencies?: string[];
   mappedCurrencyCount: number;
   ready: boolean;
 };
@@ -69,6 +76,7 @@ type MobileMoneyConfiguration = {
   minimumCurrencyCount: number;
   availableCurrencies: string[];
   financialAccounts: CurrencyAccount[];
+  canManageMappings?: boolean;
   providers: ProviderConfiguration[];
 };
 
@@ -354,7 +362,7 @@ export function MobileMoneyAgencyWorkspace({
           context.setRefreshKey((value) => value + 1);
         };
         if (context.tab === "HISTORY") {
-          return <MobileMoneyHistory organizationId={organizationId} dashboard={dashboard} locale={locale} busyAction={context.busyAction} mutate={context.mutate} />;
+          return <MobileMoneyHistory organizationId={organizationId} organizationName={organizationName} dashboard={dashboard} locale={locale} busyAction={context.busyAction} refreshKey={context.refreshKey} mutate={context.mutate} />;
         }
         if (context.tab === "CONFIG") {
           return <MobileMoneyConfigurationPanel dashboard={dashboard} locale={locale} configuration={configuration} configurationBusy={configurationBusy} configurationError={configurationError} reload={reload} busyAction={context.busyAction} mutate={context.mutate} organizationId={organizationId} />;
@@ -413,7 +421,7 @@ function MobileMoneyOperations({
   const activeCash = openCashSessions.find((session) => session.id === selectedCashSessionId) || openCashSessions[0] || null;
   const currency = activeCash?.financialAccount.currencyCode || "";
   const providers = configuration?.providers || [];
-  const eligibleProviders = providers.filter((provider) => provider.accounts.some((mapping) => mapping.currencyCode === currency));
+  const eligibleProviders = providers.filter((provider) => provider.operationCurrencies?.includes(currency));
   const formProvider = eligibleProviders.find((provider) => provider.providerCode === selectedProviderCode) || null;
   const formWallet = formProvider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
   const pendingProvider = pending ? providers.find((provider) => provider.providerCode === pending.providerCode) : null;
@@ -486,7 +494,6 @@ function MobileMoneyOperations({
 
             const providerCode = selectedProviderCode || String(form.get("providerCode") || "");
             const provider = eligibleProviders.find((item) => item.providerCode === providerCode) || null;
-            const wallet = provider?.accounts.find((mapping) => mapping.currencyCode === currency) || null;
             const phone = normalizePhonePreview(String(form.get("customerPhone") || ""));
             const principalAmount = Number(form.get("principalAmount") || 0);
             const customerFeeAmount = Number(form.get("customerFeeAmount") || 0);
@@ -495,7 +502,7 @@ function MobileMoneyOperations({
             const providerManualExecution = Boolean(provider && provider.executionMode !== "CONNECTED");
             const nextErrors: OperationFieldErrors = {};
 
-            if (!provider || !wallet) nextErrors.provider = formCopy.providerRequired;
+            if (!provider || !provider.operationCurrencies?.includes(currency)) nextErrors.provider = formCopy.providerRequired;
             if (phone.length < 5) nextErrors.phone = formCopy.phoneRequired;
             if (!Number.isFinite(principalAmount) || principalAmount <= 0) nextErrors.amount = formCopy.amountInvalid;
             if (!Number.isFinite(customerFeeAmount) || customerFeeAmount < 0) nextErrors.fee = formCopy.feeInvalid;
@@ -510,7 +517,7 @@ function MobileMoneyOperations({
               setPending(null);
               return;
             }
-            if (!provider || !wallet) return;
+            if (!provider || !provider.operationCurrencies?.includes(currency)) return;
 
             setOperationError("");
             setPending({
@@ -556,9 +563,9 @@ function MobileMoneyOperations({
             </MobileMoneyGuidedField>
 
             <MobileMoneyGuidedField label={copy.walletUsed} help={formCopy.walletHelp} required requiredLabel={formCopy.required} error={fieldErrors.provider}>
-              <MobileMoneySelect value={formWallet?.financialAccountId || ""} disabled aria-label={copy.walletUsed}>
+              <MobileMoneySelect value={formWallet?.financialAccountId || (formProvider ? "automatic" : "")} disabled aria-label={copy.walletUsed}>
                 <option value="">—</option>
-                {formWallet ? <option value={formWallet.financialAccountId}>{formWallet.financialAccount.name} · {currency}</option> : null}
+                {formWallet ? <option value={formWallet.financialAccountId}>{formWallet.financialAccount.name} · {currency}</option> : formProvider ? <option value="automatic">{translateRetailWorkspace(locale, "mobileMoneyWalletAutomaticRestricted")} · {currency}</option> : null}
               </MobileMoneySelect>
             </MobileMoneyGuidedField>
 
@@ -708,7 +715,7 @@ function MobileMoneyOperations({
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
               <MobileMoneyReviewItem label={formCopy.till} value={`${activeCash?.financialAccount.name || "—"} · ${pending.currencyCode}`} />
-              <MobileMoneyReviewItem label={formCopy.wallet} value={`${pendingWallet?.financialAccount.name || "—"} · ${pending.currencyCode}`} />
+              <MobileMoneyReviewItem label={formCopy.wallet} value={`${pendingWallet?.financialAccount.name || translateRetailWorkspace(locale, "mobileMoneyWalletAutomaticRestricted")} · ${pending.currencyCode}`} />
               <MobileMoneyReviewItem label={formCopy.customer} value={pending.customerPhone} />
               <MobileMoneyReviewItem label={copy.feeCollection} value={customerFacingFeeCollectionMode(pending.feeCollectionMode, locale)} />
               <MobileMoneyReviewItem label={formCopy.fees} value={moneyValue(pending.customerFeeAmount, pending.currencyCode, locale)} />
@@ -855,7 +862,7 @@ function MobileMoneyFxPanel({
                 <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.sourceAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAmount), preview.sourceCurrencyCode, locale)}</p></div>
                 <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.rate}</p><p className="font-black text-dtsc-ink">1 {preview.sourceCurrencyCode} = {Number(preview.rate).toLocaleString(translateRetailWorkspace(locale, "mobileMoneyEnUS"), { maximumFractionDigits: 6 })} {preview.targetCurrencyCode}</p></div>
                 <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.targetAmount}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.targetAmount), preview.targetCurrencyCode, locale)}</p></div>
-                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.available}</p><p className="font-black text-dtsc-ink">{moneyValue(Number(preview.sourceAvailableBalance), preview.sourceCurrencyCode, locale)}</p></div>
+                <div><p className="text-xs font-bold uppercase text-dtsc-muted">{copy.available}</p><p className="font-black text-dtsc-ink">{formatAnalyticsAmount({ amount: String(preview.sourceAvailableBalance), currencyCode: preview.sourceCurrencyCode }, locale)}</p></div>
               </div>
               <p className="mt-2 text-xs font-semibold text-dtsc-muted">{formatEnterpriseDate(preview.rateDate, locale)} · {preview.rateSource}</p>
               {!preview.sufficientBalance ? <p className="mt-3 font-bold text-rose-700 dark:text-rose-200">{copy.fxInsufficient}</p> : null}
@@ -916,10 +923,12 @@ function MobileMoneyConfigurationPanel({
   if (configurationBusy && !configuration) return <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm font-semibold text-dtsc-muted">{copy.processing}</div>;
   if (configurationError && !configuration) return <div role="alert" className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-4 text-sm font-bold text-rose-700 dark:text-rose-200">{configurationError}</div>;
   if (!configuration) return null;
+  const canManageMappings = dashboard.access.canManage && configuration.canManageMappings === true;
 
   return (
     <div id="mobile-money-wallet-configuration" className="grid min-w-0 gap-5">
       <ModuleSection title={copy.configTitle} description={copy.configDescription}>
+        {configuration.canManageMappings === false ? <p className="mb-3 rounded-xl border border-dtsc-border p-3 text-sm text-dtsc-muted">{translateRetailWorkspace(locale, "mobileMoneyWalletScopedReadOnly")}</p> : null}
         <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
           <p className="text-sm font-semibold text-dtsc-muted">{configuration.requiredCurrencies.length ? `${copy.requiredCountry}: ${configuration.requiredCurrencies.join(" + ")}` : copy.minimumTwo}</p>
           <Button size="sm" variant="outline" type="button" disabled={configurationBusy} onClick={() => void reload()}><RefreshCw className="h-4 w-4" />{copy.refresh}</Button>
@@ -947,10 +956,10 @@ function MobileMoneyConfigurationPanel({
                   {fixedCurrencies.map((currencyCode) => {
                     const mapping = provider.accounts.find((item) => item.currencyCode === currencyCode);
                     const accounts = configuration.financialAccounts.filter((account) => account.currencyCode === currencyCode);
-                    return <WalletMappingRow key={currencyCode} provider={provider} currencyCode={currencyCode} mapping={mapping || null} accounts={accounts} canManage={dashboard.access.canManage} busy={Boolean(busyAction)} locale={locale} onSave={saveMapping} />;
+                    return <WalletMappingRow key={currencyCode} provider={provider} currencyCode={currencyCode} mapping={mapping || null} accounts={accounts} canManage={canManageMappings} busy={Boolean(busyAction)} locale={locale} onSave={saveMapping} />;
                   })}
                   {!fixedCurrencies.length ? <p className="text-sm font-semibold text-dtsc-muted">{copy.minimumTwo}</p> : null}
-                  {dashboard.access.canManage && addable.length ? (
+                  {canManageMappings && addable.length ? (
                     <div className="rounded-xl border border-dashed border-dtsc-border p-3">
                       <p className="mb-2 text-xs font-black uppercase tracking-wide text-dtsc-muted">{copy.addCurrency}</p>
                       <div className="grid gap-3 sm:grid-cols-[0.45fr_minmax(0,1fr)_auto] sm:items-end">
@@ -1016,7 +1025,7 @@ function WalletMappingRow({
           <StatusBadge tone={mapping ? "success" : "warning"}>{currencyCode}</StatusBadge>
           <div>
             <p className="text-sm font-black text-dtsc-ink">{mapping?.financialAccount.name || copy.notConfigured}</p>
-            {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {moneyValue(Number(mapping.financialAccount.operationalBalance), currencyCode, locale)}</p> : null}
+            {mapping ? <p className="text-xs font-semibold text-dtsc-muted">{copy.currentWallet} · {formatAnalyticsAmount({ amount: String(mapping.financialAccount.operationalBalance), currencyCode }, locale)}</p> : null}
           </div>
         </div>
         <StatusBadge tone={mapping ? "success" : "warning"}>{mapping ? "OK" : copy.incomplete}</StatusBadge>
@@ -1038,19 +1047,64 @@ function WalletMappingRow({
 
 function MobileMoneyHistory({
   organizationId,
+  organizationName,
   dashboard,
   locale,
   busyAction,
+  refreshKey,
   mutate,
 }: {
   organizationId: string;
+  organizationName: string;
   dashboard: RetailDashboard;
   locale: "fr" | "en";
   busyAction: string | null;
+  refreshKey: number;
   mutate: RetailMutation;
 }) {
   const copy = COPY[locale];
-  const items = dashboard.recent.mobileMoney || [];
+  const label = (key: RetailWorkspaceKey) => translateRetailWorkspace(locale, key);
+  const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [transactionType, setTransactionType] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const params = useMemo(() => {
+    const query = new URLSearchParams({ page: String(page), pageSize: "30" });
+    if (search.trim()) query.set("search", search.trim());
+    if (recordStatus) query.set("status", recordStatus);
+    if (transactionType) query.set("transactionType", transactionType);
+    if (dateFrom) query.set("dateFrom", dateFrom);
+    if (dateTo) query.set("dateTo", dateTo);
+    return query;
+  }, [page, search, recordStatus, transactionType, dateFrom, dateTo]);
+  const endpoint = `/api/enterprise/${organizationId}/retail/mobile-money`;
+  const collection = useProfessionalCollection<MobileMoneyOperation, MonetaryScopes>({ endpoint, params, refreshKey });
+  const ready = !collection.loading && !collection.error;
+  const filters = { search: search.trim(), status: recordStatus, transactionType, dateFrom, dateTo };
+  const reportFilters = [
+    { label: label("mobileMoneyHistorySearchLabel"), value: search.trim() },
+    { label: label("mobileMoneyHistoryStatus"), value: recordStatus ? customerFacingStatusLabel(recordStatus, locale) : "" },
+    { label: label("mobileMoneyHistoryType"), value: transactionType ? customerFacingMobileMoneyTransactionType(transactionType, locale) : "" },
+    { label: label("mobileMoneyHistoryDateFrom"), value: dateFrom },
+    { label: label("mobileMoneyHistoryDateTo"), value: dateTo },
+  ].filter(filter => filter.value);
+  const columns: FinanceExportColumn[] = [
+    { key: "number", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryReference"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryReference"), get: row => String(row.number ?? "") },
+    { key: "provider", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryProvider"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryProvider"), get: row => providerLabel(dashboard, String(row.providerCode ?? "")) },
+    { key: "type", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryType"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryType"), get: row => customerFacingMobileMoneyTransactionType(String(row.transactionType ?? ""), locale) },
+    { key: "status", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryStatus"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryStatus"), get: row => customerFacingStatusLabel(String(row.status ?? ""), locale) },
+    { key: "phone", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryMaskedPhone"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryMaskedPhone"), get: row => String(row.customerPhoneMasked ?? "") },
+    { key: "principal", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryPrincipal"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryPrincipal"), get: row => exactDecimalExportValue(String(row.principalAmount ?? "")) },
+    { key: "fee", labelFr: COPY.fr.fee, labelEn: COPY.en.fee, get: row => exactDecimalExportValue(String(row.customerFeeAmount ?? "")) },
+    { key: "commission", labelFr: COPY.fr.commission, labelEn: COPY.en.commission, get: row => exactDecimalExportValue(String(row.providerCommissionAmount ?? "")) },
+    { key: "cashEffect", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryCashEffect"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryCashEffect"), get: row => exactDecimalExportValue(String(row.cashEffectAmount ?? "")) },
+    { key: "floatEffect", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryFloatEffect"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryFloatEffect"), get: row => exactDecimalExportValue(String(row.floatEffectAmount ?? "")) },
+    { key: "currency", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryCurrency"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryCurrency"), get: row => String(row.currencyCode ?? "") },
+    { key: "reference", labelFr: COPY.fr.operatorReference, labelEn: COPY.en.operatorReference, get: row => String(row.externalReference ?? "") },
+    { key: "date", labelFr: translateRetailWorkspace("fr", "mobileMoneyHistoryDate"), labelEn: translateRetailWorkspace("en", "mobileMoneyHistoryDate"), get: row => String(row.occurredAt ?? "") },
+  ];
   const [reverseTarget, setReverseTarget] = useState<{ id: string; revision: number; number: string } | null>(null);
   const [reverseReason, setReverseReason] = useState("");
   const [reverseError, setReverseError] = useState("");
@@ -1081,59 +1135,46 @@ function MobileMoneyHistory({
     if (result) closeReverseDialog();
   }
 
+  function renderItem(item: MobileMoneyOperation) {
+    return <BusinessListItem key={item.id}
+      title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
+      status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
+      meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${formatAnalyticsAmount({ amount: String(item.principalAmount), currencyCode: item.currencyCode }, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+      description={`${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
+      actions={dashboard.access.canManage && item.status === "CONFIRMED" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)}
+        onClick={() => { setReverseTarget({ id: item.id, revision: item.revision, number: item.number }); setReverseReason(""); setReverseError(""); }}>
+        <RotateCcw className="h-4 w-4" />{copy.reverse}
+      </Button> : undefined} />;
+  }
+
   return (
     <div className="grid min-w-0 gap-5">
-      <ModuleSection title={copy.history}>
-        {items.length ? (
-          <BusinessList ariaLabel={copy.history}>
-            {items.map((item) => {
-              const isFxConversion = item.transactionType.startsWith("FX_CONVERSION_");
-              const isFxAccountingPending = item.transactionType.startsWith("FX_CONVERSION_PENDING:");
-              const accountingAction = `fx-accounting-${item.id}`;
-              return (
-                <BusinessListItem
-                  key={item.id}
-                  title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
-                  status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                  meta={`${customerFacingMobileMoneyTransactionType(item.transactionType, locale)} · ${moneyValue(item.principalAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
-                  description={isFxConversion
-                    ? `${item.customerPhoneMasked || "—"} · ${item.externalReference || "—"}`
-                    : `${item.customerPhoneMasked || "—"} · ${copy.operatorReference}: ${item.externalReference || "—"}`}
-                  actions={dashboard.access.canManage && isFxAccountingPending ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={Boolean(busyAction)}
-                      onClick={() => void mutate(
-                        accountingAction,
-                        `/api/enterprise/${organizationId}/retail/mobile-money/fx/${item.id}/accounting`,
-                        {},
-                        copy.accountingFinalized,
-                        { idempotent: false },
-                      )}
-                    >
-                      <RefreshCw className="h-4 w-4" />{busyAction === accountingAction ? copy.processing : copy.accountingRetry}
-                    </Button>
-                  ) : dashboard.access.canManage && item.status === "CONFIRMED" ? (
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      disabled={Boolean(busyAction)}
-                      onClick={() => {
-                        setReverseTarget({ id: item.id, revision: item.revision, number: item.number });
-                        setReverseReason("");
-                        setReverseError("");
-                      }}
-                    >
-                      <RotateCcw className="h-4 w-4" />{copy.reverse}
-                    </Button>
-                  ) : undefined}
-                />
-              );
-            })}
-          </BusinessList>
-        ) : <EmptyState compact title={copy.noTransaction} description={copy.noTransactionDescription} />}
-      </ModuleSection>
+      <section data-mobile-money-history-design2 className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
+        <h2 className="text-lg font-black text-dtsc-ink">{label("mobileMoneyHistoryOperations")}{ready ? <span className="ml-2 text-xs text-dtsc-muted">{collection.pagination.total}</span> : null}</h2>
+        <ProfessionalSearch value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder={label("mobileMoneyHistorySearch")} />
+        <Field label={label("mobileMoneyHistoryType")}>
+          <MobileMoneySelect value={transactionType} onChange={event => { setTransactionType(event.target.value); setPage(1); }}>
+            <option value="">{label("mobileMoneyHistoryAllTypes")}</option>
+            {["DEPOSIT", "WITHDRAWAL"].map(type => <option key={type} value={type}>{customerFacingMobileMoneyTransactionType(type, locale)}</option>)}
+          </MobileMoneySelect>
+        </Field>
+        <CommercialDesign2Controls locale={locale} organizationName={organizationName} title={label("mobileMoneyHistoryOperations")}
+          endpoint={endpoint} filters={filters} reportFilters={reportFilters} columns={columns}
+          from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+          status={recordStatus} onStatusChange={next => { setRecordStatus(next); setPage(1); }}
+          choices={[{ id: "", label: label("mobileMoneyHistoryAllStatuses") }, ...["CONFIRMED", "REVERSED"].map(id => ({ id, label: customerFacingStatusLabel(id, locale) }))]}
+          disabledExport={!ready} noteFr={translateRetailWorkspace("fr", "mobileMoneyHistoryNote")} noteEn={translateRetailWorkspace("en", "mobileMoneyHistoryNote")} />
+        {ready ? <FinanceAmountScopes totals={collection.extra} locale={locale} /> : null}
+        {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? (
+          <BusinessList ariaLabel={label("mobileMoneyHistoryOperations")}>{collection.items.map(renderItem)}</BusinessList>
+        ) : <EmptyState compact title={copy.noTransaction} description={label("mobileMoneyHistoryNoOperations")} />}
+        <div className="flex min-w-0 flex-wrap items-center justify-between gap-2" data-responsive-actions>
+          <Button type="button" variant="outline" disabled={!ready || page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>{label("mobileMoneyHistoryPrevious")}</Button>
+          <span className="text-xs font-semibold text-dtsc-muted">{label("mobileMoneyHistoryPage")} {collection.pagination.page} / {collection.pagination.pageCount}</span>
+          <Button type="button" variant="outline" disabled={!ready || page >= collection.pagination.pageCount} onClick={() => setPage(value => value + 1)}>{label("mobileMoneyHistoryNext")}</Button>
+        </div>
+      </section>
+      <MobileMoneyFxHistory organizationId={organizationId} organizationName={organizationName} dashboard={dashboard} locale={locale} busyAction={busyAction} refreshKey={refreshKey} mutate={mutate} />
       <RetailErpLinks moduleCode="MOBILE_MONEY_AGENCY" locale={locale} />
 
       <Dialog
@@ -1169,4 +1210,90 @@ function MobileMoneyHistory({
       </Dialog>
     </div>
   );
+}
+
+type FxHistoryItem = {
+  id: string; number: string; providerCode: string; sourceCurrencyCode: string; targetCurrencyCode: string;
+  sourceAmount: string; targetAmount: string; exchangeRate: string; exchangeRateDate: string;
+  status: string; occurredAt: string; accountingStatus: "POSTED" | "PENDING"; accountingBlockerCode: string | null;
+};
+
+function fxPostingLabel(item: Pick<FxHistoryItem, "accountingStatus" | "accountingBlockerCode">, locale: "fr" | "en") {
+  return customerFacingMobileMoneyTransactionType(item.accountingStatus === "POSTED" ? "FX_CONVERSION_POSTED" : `FX_CONVERSION_PENDING:${item.accountingBlockerCode || "POSTING_PENDING"}`, locale);
+}
+
+function MobileMoneyFxHistory({ organizationId, organizationName, dashboard, locale, busyAction, refreshKey, mutate }: {
+  organizationId: string; organizationName: string; dashboard: RetailDashboard; locale: "fr" | "en";
+  busyAction: string | null; refreshKey: number; mutate: RetailMutation;
+}) {
+  const copy = COPY[locale];
+  const label = (key: RetailWorkspaceKey) => translateRetailWorkspace(locale, key);
+  const [search, setSearch] = useState("");
+  const [recordStatus, setRecordStatus] = useState("");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
+  const [page, setPage] = useState(1);
+  const params = useMemo(() => {
+    const query = new URLSearchParams({ view: "history", page: String(page), pageSize: "30" });
+    if (search.trim()) query.set("search", search.trim());
+    if (recordStatus) query.set("status", recordStatus);
+    if (dateFrom) query.set("dateFrom", dateFrom);
+    if (dateTo) query.set("dateTo", dateTo);
+    return query;
+  }, [page, search, recordStatus, dateFrom, dateTo]);
+  const endpoint = `/api/enterprise/${organizationId}/retail/mobile-money/fx`;
+  const collection = useProfessionalCollection<FxHistoryItem, MonetaryScopes>({ endpoint, params, refreshKey });
+  const ready = !collection.loading && !collection.error;
+  const filters = { view: "history", search: search.trim(), status: recordStatus, dateFrom, dateTo };
+  const reportFilters = [
+    { label: label("mobileMoneyHistorySearchLabel"), value: search.trim() },
+    { label: label("mobileMoneyHistoryStatus"), value: recordStatus ? customerFacingStatusLabel(recordStatus, locale) : "" },
+    { label: label("mobileMoneyHistoryDateFrom"), value: dateFrom },
+    { label: label("mobileMoneyHistoryDateTo"), value: dateTo },
+  ].filter(filter => filter.value);
+  const column = (key: string, translation: RetailWorkspaceKey, get: FinanceExportColumn["get"]): FinanceExportColumn =>
+    ({ key, labelFr: translateRetailWorkspace("fr", translation), labelEn: translateRetailWorkspace("en", translation), get });
+  const columns: FinanceExportColumn[] = [
+    column("number", "mobileMoneyHistoryReference", row => String(row.number ?? "")),
+    column("provider", "mobileMoneyHistoryProvider", row => providerLabel(dashboard, String(row.providerCode ?? ""))),
+    column("sourceCurrency", "mobileMoneySourceCurrency", row => String(row.sourceCurrencyCode ?? "")),
+    column("sourceAmount", "mobileMoneyFxHistorySourceAmount", row => exactDecimalExportValue(String(row.sourceAmount ?? ""))),
+    column("targetCurrency", "mobileMoneyTargetCurrency", row => String(row.targetCurrencyCode ?? "")),
+    column("targetAmount", "mobileMoneyFxHistoryTargetAmount", row => exactDecimalExportValue(String(row.targetAmount ?? ""))),
+    column("rate", "mobileMoneyRate", row => exactDecimalExportValue(String(row.exchangeRate ?? ""))),
+    column("rateDate", "mobileMoneyFxHistoryRateDate", row => String(row.exchangeRateDate ?? "")),
+    column("status", "mobileMoneyHistoryStatus", row => customerFacingStatusLabel(String(row.status ?? ""), locale)),
+    column("accounting", "mobileMoneyFxHistoryPosting", row => fxPostingLabel({ accountingStatus: row.accountingStatus === "POSTED" ? "POSTED" : "PENDING", accountingBlockerCode: typeof row.accountingBlockerCode === "string" ? row.accountingBlockerCode : null }, locale)),
+    column("date", "mobileMoneyHistoryDate", row => String(row.occurredAt ?? "")),
+  ];
+  return <section data-mobile-money-fx-history-design2 className="grid min-w-0 max-w-full grid-cols-[minmax(0,1fr)] gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 sm:p-4">
+    <h2 className="text-lg font-black text-dtsc-ink">{label("mobileMoneyFxHistoryTitle")}{ready ? <span className="ml-2 text-xs text-dtsc-muted">{collection.pagination.total}</span> : null}</h2>
+    <ProfessionalSearch value={search} onChange={value => { setSearch(value); setPage(1); }} placeholder={label("mobileMoneyFxHistorySearch")} />
+    <CommercialDesign2Controls locale={locale} organizationName={organizationName} title={label("mobileMoneyFxHistoryTitle")} endpoint={endpoint}
+      filters={filters} reportFilters={reportFilters} columns={columns} from={dateFrom} to={dateTo}
+      onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
+      status={recordStatus} onStatusChange={next => { setRecordStatus(next); setPage(1); }}
+      choices={[{ id: "", label: label("mobileMoneyHistoryAllStatuses") }, ...["CONFIRMED", "REVERSED"].map(id => ({ id, label: customerFacingStatusLabel(id, locale) }))]}
+      disabledExport={!ready} noteFr={translateRetailWorkspace("fr", "mobileMoneyFxHistoryNote")} noteEn={translateRetailWorkspace("en", "mobileMoneyFxHistoryNote")} />
+    {ready ? <FinanceAmountScopes totals={collection.extra} locale={locale} /> : null}
+    {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : collection.items.length ? (
+      <BusinessList ariaLabel={label("mobileMoneyFxHistoryTitle")}>{collection.items.map(item => {
+        const accountingAction = `fx-accounting-${item.id}`;
+        return <BusinessListItem key={item.id} title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
+          status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
+          meta={`${formatAnalyticsAmount({ amount: item.sourceAmount, currencyCode: item.sourceCurrencyCode }, locale)} → ${formatAnalyticsAmount({ amount: item.targetAmount, currencyCode: item.targetCurrencyCode }, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+          description={`1 ${item.sourceCurrencyCode} = ${item.exchangeRate} ${item.targetCurrencyCode} · ${label("mobileMoneyFxHistoryRateDate")}: ${formatEnterpriseDate(item.exchangeRateDate, locale)} · ${label("mobileMoneyFxHistoryPosting")}: ${fxPostingLabel(item, locale)}`}
+          actions={dashboard.access.canManage && item.status === "CONFIRMED" && item.accountingStatus === "PENDING" ? (
+            <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => void mutate(accountingAction, `/api/enterprise/${organizationId}/retail/mobile-money/fx/${item.id}/accounting`, {}, copy.accountingFinalized, { idempotent: false })}>
+              <RefreshCw className="h-4 w-4" />{busyAction === accountingAction ? copy.processing : copy.accountingRetry}
+            </Button>
+          ) : undefined} />;
+      })}</BusinessList>
+    ) : <EmptyState compact title={label("mobileMoneyFxHistoryEmpty")} />}
+    <div className="flex min-w-0 flex-wrap items-center justify-between gap-2" data-responsive-actions>
+      <Button type="button" variant="outline" disabled={!ready || page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))}>{label("mobileMoneyHistoryPrevious")}</Button>
+      <span className="text-xs font-semibold text-dtsc-muted">{label("mobileMoneyHistoryPage")} {collection.pagination.page} / {collection.pagination.pageCount}</span>
+      <Button type="button" variant="outline" disabled={!ready || page >= collection.pagination.pageCount} onClick={() => setPage(value => value + 1)}>{label("mobileMoneyHistoryNext")}</Button>
+    </div>
+  </section>;
 }

@@ -1,6 +1,7 @@
 "use client";
 import { ErpDesign2RegisterTools, type ErpDesign2StatusOption } from "@/components/enterprise/professional/erp-design2-register";
 import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { canonicalContractType, professionalErpEnumLabel, professionalErpT, professionalHrCodeLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 
 type HrKind = "contracts" | "schedules" | "attendance" | "leave" | "timesheets" | "payroll-runs" | "payroll-periods";
 const txt = (value: unknown) => value == null ? "" : String(value);
@@ -22,7 +23,12 @@ const columns: Record<HrKind, FinanceExportColumn[]> = {
   attendance: [employee, col("attendanceDate", "Date", "Date", (row) => date(row.attendanceDate)), status, col("source", "Origine", "Source")],
   leave: [reference, employee, col("leaveType", "Type de congé", "Leave type"), start("startDate"), end("endDate"), status],
   timesheets: [reference, employee, start("periodStart"), end("periodEnd"), status, col("totalApprovedMinutes", "Minutes approuvées", "Approved minutes")],
-  "payroll-runs": [reference, col("payrollPeriod", "Période de paie", "Payroll period", (row) => name(row, "payrollPeriod", "name")), status, col("employeeCount", "Effectif", "Employees"), col("currency", "Devise", "Currency"), col("netAmount", "Total net", "Net total")],
+  "payroll-runs": [
+    reference, col("payrollPeriod", "Période de paie", "Payroll period", (row) => name(row, "payrollPeriod", "name")), status,
+    col("employeeCount", "Effectif", "Employees"), col("currency", "Devise", "Currency"),
+    col("grossAmount", "Total brut", "Gross total"), col("bonusAmount", "Primes", "Bonuses"),
+    col("deductionAmount", "Retenues", "Deductions"), col("netAmount", "Total net", "Net total"),
+  ],
   "payroll-periods": [col("code", "Code", "Code"), col("name", "Libellé", "Name"), start("periodStart"), end("periodEnd"), status, col("payDate", "Paiement prévu", "Planned pay date", (row) => date(row.payDate))],
 };
 const endpoint: Record<HrKind, string> = {
@@ -37,10 +43,63 @@ export function HrDesign2Tools({ kind, organizationId, organizationName, title, 
   onStatusChange: (value: string) => void; dateFrom: string; dateTo: string;
   onDateChange: (from: string, to: string) => void;
 }) {
+  const exportColumns: FinanceExportColumn[] = columns[kind].map((column) => {
+    if (kind === "contracts" && column.key === "contractType") return {
+      ...column,
+      get: (row: Record<string, unknown>) => {
+        const value = txt(row.contractType);
+        return value ? professionalErpEnumLabel(locale, "employmentContractType", canonicalContractType(value)) : "";
+      },
+    };
+    if (kind === "schedules" && column.key === "scheduleType") return {
+      ...column,
+      get: (row: Record<string, unknown>) => professionalHrCodeLabel(locale, "scheduleType", txt(row.scheduleType)),
+    };
+    if (kind === "attendance" && column.key === "source") return {
+      ...column,
+      get: (row: Record<string, unknown>) => professionalHrCodeLabel(locale, "attendanceSource", txt(row.source)),
+    };
+    if (column.key === "status") return {
+      ...column,
+      get: (row: Record<string, unknown>) => {
+        const value = txt(row.status);
+        if (kind === "contracts" && row.archivedAt) return locale === "en" ? "Archived" : "Archivé";
+        if (!value) return "";
+        const known = statuses.find((option) => option.id === value)?.label;
+        if (known) return known;
+        if (kind === "contracts") return professionalErpEnumLabel(locale, "employmentContractStatus", value);
+        if (kind === "payroll-runs" || kind === "payroll-periods") return professionalErpEnumLabel(locale, "payrollStatus", value);
+        if (kind === "leave" || kind === "timesheets") return professionalErpEnumLabel(locale, "timeStatus", value);
+        return professionalErpT(locale, "common.valueToReview");
+      },
+    };
+    if (kind === "leave" && column.key === "leaveType") return {
+      ...column,
+      get: (row: Record<string, unknown>) => {
+        const value = txt(row.leaveType);
+        return value ? professionalErpEnumLabel(locale, "leaveType", value) : "";
+      },
+    };
+    return column;
+  });
+  const reportFilters: { label: string; value: string }[] = [];
+  const appendFilter = (key: Parameters<typeof professionalErpT>[1], value: string | null) => {
+    if (value) reportFilters.push({ label: professionalErpT(locale, key), value });
+  };
+  const statusValue = filters.get("status");
+  if (statusValue) {
+    appendFilter("hr.filter.status", statuses.find((option) => option.id === statusValue)?.label || professionalErpT(locale, "common.valueToReview"));
+  }
+  appendFilter("hr.filter.search", filters.get("search"));
+  appendFilter("hr.filter.from", filters.get("dateFrom"));
+  appendFilter("hr.filter.to", filters.get("dateTo"));
+  if (kind === "contracts") {
+    appendFilter("hr.filter.archive", professionalErpT(locale, filters.get("archived") === "1" ? "hr.filter.archived" : "hr.filter.current"));
+  }
   return <ErpDesign2RegisterTools
     locale={locale} title={title} organizationName={organizationName}
     endpoint={`/api/enterprise/${organizationId}/${endpoint[kind]}`}
-    filters={Object.fromEntries(filters.entries())} columns={columns[kind]}
+    filters={Object.fromEntries(filters.entries())} reportFilters={reportFilters} columns={exportColumns}
     status={current} statuses={statuses} onStatusChange={onStatusChange}
     dateFrom={dateFrom} dateTo={dateTo} onDateChange={onDateChange}
   />;

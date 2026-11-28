@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
+import { Prisma } from "@prisma/client";
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 
 const read = (path) => readFileSync(new URL("../" + path, import.meta.url), "utf8");
 function loadModule(source, modules) {
@@ -18,13 +20,7 @@ assert.equal(dates.isCivilDate("2026-02-31"), false);
 assert.equal(dates.civilMidnightUtc("2026-11-23", "Africa/Kinshasa").toISOString(), "2026-11-22T23:00:00.000Z");
 assert.equal(dates.civilMidnightUtc("2026-11-24", "Africa/Kinshasa").toISOString(), "2026-11-23T23:00:00.000Z");
 
-class Decimal {
-  constructor(v) { this.n = Number(v || 0); }
-  plus(v) { return new Decimal(this.n + Number(v instanceof Decimal ? v.n : v)); }
-  minus(v) { return new Decimal(this.n - Number(v instanceof Decimal ? v.n : v)); }
-  times(v) { return new Decimal(this.n * Number(v instanceof Decimal ? v.n : v)); }
-  toFixed(n) { return this.n.toFixed(n); }
-}
+const { Decimal } = Prisma;
 class NextResponse {
   constructor(body, init = {}) { this.body = body; this.status = init.status || 200; this.headers = init.headers || {}; }
   static json(body, init) { return new NextResponse(body, init); }
@@ -33,9 +29,14 @@ let authorized = ["store-a"];
 let enabled = true;
 let captured = [];
 let logs = 0;
+const quantityDisplay = loadModule(read("lib/enterprise/inventory/quantity-display.ts"), {});
+assert.equal(quantityDisplay.formatInventoryQuantity(new Decimal(2.125), 0).value, "2.125");
+assert.equal(quantityDisplay.formatInventoryQuantity(new Decimal(2.125), 0).precisionMismatch, true);
+assert.equal(quantityDisplay.formatInventoryQuantity(new Decimal(2), 0).value, "2");
+assert.equal(quantityDisplay.formatInventoryQuantity(new Decimal(2.5), 2).value, "2.50");
 const products = [
-  { id: "product-a", catalogItem: { code: "A-001", name: "Article A" } },
-  { id: "product-b", catalogItem: { code: "B-001", name: "=SUM(1,1)" } },
+  { id: "product-a", catalogItem: { code: "A-001", name: "Article A", unitOfMeasure: { name: "Pièce", symbol: "pc", decimalScale: 0 } } },
+  { id: "product-b", catalogItem: { code: "B-001", name: "=SUM(1,1)", unitOfMeasure: { name: "Litre", symbol: "L", decimalScale: 2 } } },
 ];
 const movementsBefore = [
   { inventoryItemId: "product-a", direction: "IN", _sum: { quantity: 20 } },
@@ -49,6 +50,18 @@ const today = [
   { inventoryItemId: "product-b", direction: "OUT", movementType: "SALE_FULFILLMENT", _sum: { quantity: 8 } },
 ];
 const prisma = {
+  $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(prisma);
+  },
+  $queryRaw: async (query) => {
+    assert.ok(query.text.includes("site_warehouses") && query.text.includes("GROUP BY e."));
+    const unitTotals = [
+      { unitId: "pc", unitName: "Pièce", unitSymbol: "pc", decimalScale: 0, opening: new Decimal(20), entries: new Decimal(10), sold: new Decimal(7), otherOut: new Decimal(2), closing: new Decimal(21), reserved: null, available: null },
+      { unitId: "L", unitName: "Litre", unitSymbol: "L", decimalScale: 2, opening: new Decimal(15), entries: new Decimal(5), sold: new Decimal(8), otherOut: new Decimal(0), closing: new Decimal(12), reserved: null, available: null },
+    ];
+    return ["filteredTotals", "generalTotals", "pageTotals"].flatMap(scope => unitTotals.map(row => ({ ...row, scope })));
+  },
   enterpriseSite: { findFirst: async ({ where }) => where.organizationId === "tenant" && where.id === "store-a"
     ? { id: "store-a", code: "A", name: "Boutique A", timezone: "Africa/Kinshasa" } : null },
   organization: { findFirst: async () => ({ name: "KIN FOREX", timezone: "Africa/Kinshasa" }) },
@@ -68,7 +81,9 @@ const prisma = {
 };
 class RetailError extends Error { constructor(code, status) { super(code); this.code = code; this.status = status; } }
 const api = loadModule(read("app/api/enterprise/[organizationId]/retail/daily-close/stock-report/route.ts"), {
-  "@prisma/client": { Prisma: { Decimal } },
+  "@prisma/client": { Prisma },
+  "@/lib/enterprise/inventory/quantity-policy": workflowTestLoader({})("@/lib/enterprise/inventory/quantity-policy"),
+  "@/lib/enterprise/inventory/quantity-display": quantityDisplay,
   exceljs: { default: class Workbook {} },
   "next/server": { NextResponse },
   "@/lib/audit": { writeApiLog: async () => { logs++; } },
@@ -99,8 +114,17 @@ let response = await invoke("siteId=store-a&date=2026-11-23");
 assert.equal(response.status, 200);
 const [a, b] = response.body.rows;
 assert.equal(response.body.timezone, "Africa/Kinshasa");
-assert.deepEqual([a.opening, a.entries, a.sold, a.otherOut, a.closing], ["20.000", "10.000", "7.000", "2.000", "21.000"]);
-assert.deepEqual([b.opening, b.entries, b.sold, b.otherOut, b.closing], ["15.000", "5.000", "8.000", "0.000", "12.000"]);
+assert.deepEqual([a.opening, a.entries, a.sold, a.otherOut, a.closing], ["20", "10", "7", "2", "21"]);
+assert.deepEqual([b.opening, b.entries, b.sold, b.otherOut, b.closing], ["15.00", "5.00", "8.00", "0.00", "12.00"]);
+assert.equal(response.body.filteredTotals.length, 2);
+assert.equal(response.body.filteredTotals[0].closing, "21");
+assert.equal(response.body.filteredTotals[1].closing, "12.00");
+assert.deepEqual(response.body.generalTotals.map(row => row.closing).join(","), "21,12.00");
+assert.deepEqual(response.body.pageTotals.map(row => row.closing).join(","), "21,12.00");
+assert.equal(a.decimalScale, 0);
+assert.equal(b.decimalScale, 2);
+assert.equal(a.precisionMismatch, false);
+assert.equal(b.precisionMismatch, false);
 assert.equal(a.reserved, null, "No fabricated reservations for historical dates");
 assert.ok(captured.some((w) => w.occurredAt?.gte?.toISOString() === "2026-11-22T23:00:00.000Z"));
 assert.ok(captured.some((w) => w.occurredAt?.lt?.toISOString() === "2026-11-23T23:00:00.000Z"));
@@ -109,8 +133,10 @@ assert.ok(captured.some((w) => w.createdAt?.lt instanceof Date), "Archived items
 response = await invoke("siteId=store-a&date=2026-11-23&format=csv");
 assert.equal(response.status, 200);
 assert.match(response.body, /Stock initial/);
-assert.match(response.body, /21.000/);
-assert.match(response.body, /12.000/);
+assert.match(response.body, /"21"/);
+assert.match(response.body, /"12\.00"/);
+assert.match(response.body, /Total boutique sans recherche/);
+assert.doesNotMatch(response.body, /Sous-total de la page/);
 assert.match(response.body, /'=SUM\(1,1\)/, "CSV formula injection must be neutralized");
 response = await invoke("siteId=store-a&date=2026-11-23&format=print");
 assert.equal(response.status, 200);
@@ -118,6 +144,14 @@ assert.match(response.body, /window.print/);
 assert.match(response.body, /<table>/);
 assert.match(response.body, /RCCM-TEST/);
 assert.match(response.body, /IDNAT-TEST/);
+response = await invoke("siteId=store-a&date=2026-11-23&format=print&locale=en");
+assert.equal(response.status, 200);
+assert.match(response.body, /html lang="en"/);
+assert.match(response.body, /Daily inventory report/);
+assert.match(response.body, /Store total without search/);
+response = await invoke("siteId=store-a&date=2026-11-23&format=csv&locale=en");
+assert.match(response.body, /Opening stock/);
+assert.match(response.body, /Store total without search/);
 response = await invoke("siteId=store-a&date=2026-02-31");
 assert.equal(response.status, 400);
 authorized = ["store-b"];

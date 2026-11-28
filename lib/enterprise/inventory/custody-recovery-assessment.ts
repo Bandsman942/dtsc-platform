@@ -216,10 +216,10 @@ export async function executeRecoveryAssessment(org:string,user:string,input:z.i
     const check=await inspectCustodyRecoveryTx(tx,org,user,input.custodyId);
     const proposal=recoveryProposal(assessment,check.historicalCostCeiling);
     if(check.revision!==assessment.custodyRevision||check.currencyCode!==assessment.currencyCode||check.originalIssueEventId!==assessment.originalIssueEventId||check.originalIssueJournalId!==assessment.originalIssueJournalId||!assessment.quantity.equals(check.quantity)||!assessment.historicalCostCeiling.equals(check.historicalCostCeiling)||!assessment.proposedRecoveryAmount.equals(proposal.proposedRecoveryAmount)||!assessment.estimatedNetValue.equals(proposal.estimatedNetValue)||!source.stockLotId)throw conflict();
-    // Cost layers store 6 decimals; physical movement input is a JS number.
-    // Fail closed instead of silently changing the reviewed value/quantity.
-    const qty=Number(assessment.quantity.toFixed()),unitCost=money(assessment.proposedRecoveryAmount.dividedBy(assessment.quantity));
-    if(!Number.isFinite(qty)||!assessment.quantity.equals(qty)||!unitCost.gt(0)||!unitCost.times(assessment.quantity).equals(assessment.proposedRecoveryAmount))throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_PRECISION_UNSUPPORTED",409);
+    // Keep the reviewed quantity exact through the physical movement boundary.
+    // The six-place cost must still reproduce the approved value exactly.
+    const qty=assessment.quantity,unitCost=money(assessment.proposedRecoveryAmount.dividedBy(assessment.quantity));
+    if(!qty.isFinite()||!unitCost.gt(0)||!unitCost.times(qty).equals(assessment.proposedRecoveryAmount))throw new EnterpriseDomainError("INVENTORY_RETURN_RECOVERY_PRECISION_UNSUPPORTED",409);
     const [physical,layers]=await Promise.all([
       tx.enterpriseInventoryBalance.findMany({where:{organizationId:org,inventoryItemId:source.inventoryItemId,warehouseId:source.warehouseId},select:{quantityOnHand:true}}),
       tx.enterpriseInventoryCostLayer.findMany({where:{organizationId:org,inventoryItemId:source.inventoryItemId,warehouseId:source.warehouseId,remainingQuantity:{gt:0}},select:{remainingQuantity:true,currencyCode:true,valuationMethod:true}}),

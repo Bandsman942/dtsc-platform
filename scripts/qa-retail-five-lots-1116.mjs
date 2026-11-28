@@ -4,6 +4,7 @@ import vm from "node:vm";
 import ts from "typescript";
 import { Prisma } from "@prisma/client";
 import { z } from "zod";
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 
 const read = (path) => readFileSync(new URL(`../${path}`, import.meta.url), "utf8");
 const sources = [
@@ -85,14 +86,8 @@ assert.match(read("components/enterprise/professional/retail-commercial-workspac
 assert.match(read("components/enterprise/professional/retail-commercial-workspace.tsx"), /RegisterPager/);
 assert.match(read("app/api/enterprise/[organizationId]/retail/inventory-alerts/route.ts"), /lowStockPageSize/);
 
-const schemaModule = { exports: {} };
-vm.runInNewContext(ts.transpileModule(read("lib/enterprise/retail/commercial-schemas.ts"), {
-  compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
-}).outputText, {
-  module: schemaModule, exports: schemaModule.exports,
-  require(name) { if (name === "zod") return { z }; throw Error("Unexpected schema dependency " + name); },
-});
-const priceRuleSchema = schemaModule.exports.retailPriceConditionUpsertSchema;
+const { retailPriceConditionUpsertSchema: priceRuleSchema } =
+  workflowTestLoader({})("@/lib/enterprise/retail/commercial-schemas");
 const priceRule = { catalogPriceId: "price-1", channelCode: "POS", priority: 1, isActive: true };
 assert.ok(priceRuleSchema.safeParse(priceRule).success, "Creating a new price condition must not require an id");
 assert.ok(!priceRuleSchema.safeParse({ ...priceRule, id: "rule-1" }).success,

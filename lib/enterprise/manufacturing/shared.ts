@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { ManufacturingDomainError } from "@/lib/enterprise/manufacturing/errors";
 import { MANUFACTURING_SECTOR_CODE } from "@/lib/enterprise/manufacturing/constants";
 import { prisma } from "@/lib/prisma";
@@ -11,8 +12,8 @@ export function manufacturingNullable(value: string | null | undefined) {
   return normalized ? normalized : null;
 }
 
-export function manufacturingDecimal(value: Prisma.Decimal.Value = 0, places = 3) {
-  return new Prisma.Decimal(value).toDecimalPlaces(places);
+export function manufacturingDecimal(value: Prisma.Decimal.Value = 0, places = 6) {
+  return places === 6 ? requireInventoryQuantity(value, 6, { signed: true }) : new Prisma.Decimal(value).toDecimalPlaces(places);
 }
 
 export function manufacturingReference(prefix: string, businessDate: string) {
@@ -73,7 +74,7 @@ export async function requireManufacturingCatalogItem(
 ) {
   const item = await tx.enterpriseCatalogItem.findFirst({
     where: { id: catalogItemId, organizationId, status: "ACTIVE", archivedAt: null },
-    include: { unitOfMeasure: { select: { id: true, code: true, symbol: true } } },
+    include: { unitOfMeasure: { select: { id: true, code: true, symbol: true, decimalScale: true } } },
   });
   if (!item) throw new ManufacturingDomainError("L’article sélectionné n’appartient pas au catalogue actif de cette entreprise.", 400, "MANUFACTURING_CATALOG_ITEM_INVALID");
   if (options.inventoryTracked && !item.trackInventory) {
@@ -85,7 +86,7 @@ export async function requireManufacturingCatalogItem(
 export async function requireManufacturingInventoryItem(tx: ManufacturingTransaction, organizationId: string, catalogItemId: string) {
   const inventoryItem = await tx.enterpriseInventoryItem.findFirst({
     where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null },
-    select: { id: true, catalogItemId: true, allowNegativeStock: true, lotTracking: true, expiryTracking: true },
+    select: { id: true, catalogItemId: true, allowNegativeStock: true, lotTracking: true, expiryTracking: true, catalogItem: { select: { unitOfMeasure: { select: { decimalScale: true } } } } },
   });
   if (!inventoryItem) throw new ManufacturingDomainError("L’article doit d’abord être activé dans Stock & logistique.", 409, "MANUFACTURING_INVENTORY_ITEM_REQUIRED");
   return inventoryItem;

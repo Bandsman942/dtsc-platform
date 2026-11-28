@@ -6,7 +6,6 @@ import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import {
   professionalErpDate,
   professionalErpEnumLabel,
-  professionalErpNumber,
   professionalErpT,
   useProfessionalErpLocale,
 } from "@/components/enterprise/professional/professional-erp-i18n";
@@ -33,21 +32,38 @@ import { ErpDesign2Metric, ErpDesign2RegisterSection, ErpDesign2RegisterTools } 
 import { ModuleContent, ModuleHeader, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
+import type { TransferUnitConversion } from "@/lib/enterprise/inventory/transfer-unit-conversion";
+import { inventoryQuantityMetricLabel, inventoryQuantityExportValue, inventoryQuantityStep, isInventoryQuantityInputValid, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 
 type Member = { id: string; label: string; role: string; positionTitle: string | null };
 type Warehouse = { id: string; code: string; name: string; siteId: string };
 type Location = { id: string; code: string; name: string; warehouseId: string };
-type InventoryChoice = { id: string; code: string; sku: string | null; name: string; minimumQuantity: string | number | null };
+type InventoryChoice = { id: string; code: string; sku: string | null; name: string; minimumQuantity: string | number | null; unitOfMeasure: { symbol: string | null; decimalScale: number } | null };
 type Lookups = { members: Member[]; warehouses: Warehouse[]; locations: Location[]; inventoryItems: InventoryChoice[] };
 type InventoryItem = {
   id: string;
   quantityOnHand: number;
+  quantityOnHandExact?: string;
+  quantityReservedExact?: string;
+  quantityAvailableExact?: string;
   quantityReserved: number;
   quantityAvailable: number;
   isLowStock: boolean;
   minimumQuantity: string | number | null;
-  catalogItem: { id: string; code: string; sku: string | null; name: string; unitOfMeasure: { symbol: string } | null; category: { name: string } | null };
+  catalogItem: { id: string; code: string; sku: string | null; name: string; unitOfMeasure: { symbol: string | null; decimalScale: number } | null; category: { name: string } | null };
   balances: Array<{ id: string; quantityOnHand: string | number; quantityReserved: string | number; warehouse: { id: string; code: string; name: string }; storageLocation: { id: string; code: string; name: string } | null; stockLot: { id: string; lotNumber: string; expiryDate: string | null } | null }>;
+};
+type StockAnalytics = { quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[]; pageQuantityTotals?: InventoryQuantityTotal[] };
+type TransferConversionChoice = Pick<TransferUnitConversion, "sourceUnitId" | "sourceCode" | "sourceScale" | "targetCode" | "targetScale" | "factor" | "version"> & { sourceName: string };
+type TransferLine = {
+  id: string;
+  inventoryItemId: string;
+  quantity: string | number;
+  sourceLocationId: string | null;
+  destinationLocationId: string | null;
+  unitConversionJson?: TransferUnitConversion | null;
+  inventoryItem?: { catalogItem: { code: string; name: string } };
 };
 type Transfer = {
   id: string;
@@ -58,7 +74,7 @@ type Transfer = {
   approvedByUserId: string | null;
   sourceWarehouse: { id: string; code: string; name: string };
   destinationWarehouse: { id: string; code: string; name: string };
-  lines: Array<{ id: string; inventoryItemId: string; quantity: string | number; sourceLocationId: string | null; destinationLocationId: string | null }>;
+  lines: TransferLine[];
 };
 type Count = {
   id: string;
@@ -104,7 +120,19 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   const locale = useProfessionalErpLocale();
   const t = useCallback((key: Parameters<typeof professionalErpT>[1], values?: Record<string, string | number>) => professionalErpT(locale, key, values), [locale]);
   const suffix = (count: number) => (count === 1 ? "" : "s");
-  const quantity = (value: string | number, symbol?: string | null) => `${professionalErpNumber(value, locale)} ${symbol || ""}`.trim();
+  const quantity = (value: string | number, symbol?: string | null, scale?: number) => {
+    if (scale === undefined) return `${localizeInventoryQuantity(String(value), locale)} ${symbol || ""}`.trim();
+    const raw = String(value);
+    const parts = /^(-?)(\d+)(?:\.(\d+))?$/.exec(raw);
+    if (!parts) return raw;
+    const actual = (parts[3] || "").replace(/0+$/, "").length;
+    const precision = Math.max(actual, scale);
+    const whole = new Intl.NumberFormat(locale === "en" ? "en-US" : "fr-FR", { maximumFractionDigits: 0 }).format(BigInt(parts[2]));
+    const fraction = (parts[3] || "").slice(0, precision).padEnd(precision, "0");
+    const formatted = parts[1] + whole + (precision ? (locale === "en" ? "." : ",") + fraction : "");
+    const warning = actual > scale ? (locale === "fr" ? " · Précision à vérifier" : " · Precision needs review") : "";
+    return `${formatted} ${symbol || ""}`.trim() + warning;
+  };
   const memberLabel = (item: Member) => `${item.label} · ${item.positionTitle || professionalErpEnumLabel(locale, "role", item.role)}`;
   const [tab, setTab] = useState("STOCK");
   const [search, setSearch] = useState("");
@@ -127,8 +155,11 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   const [transferInventoryId, setTransferInventoryId] = useState("");
   const [transferLotId, setTransferLotId] = useState("");
   const [transferLots, setTransferLots] = useState<Array<{ id: string; lotNumber: string; expiryDate: string | null; quantityAvailable: string }>>([]);
+  const [transferConversions, setTransferConversions] = useState<TransferConversionChoice[]>([]);
+  const [transferSourceUnitId, setTransferSourceUnitId] = useState("");
   const [destinationWarehouseId, setDestinationWarehouseId] = useState("");
   const [countWarehouseId, setCountWarehouseId] = useState("");
+  const [countInventoryId, setCountInventoryId] = useState("");
   const [adjustWarehouseId, setAdjustWarehouseId] = useState("");
   const [adjustInventoryId, setAdjustInventoryId] = useState("");
   const [adjustLossReason,setAdjustLossReason]=useState("");
@@ -145,14 +176,20 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   }, [organizationId, adjustWarehouseId, adjustInventoryId,adjustLossReason]);
   useEffect(() => {
     setTransferLotId("");
-    if (!sourceWarehouseId || !transferInventoryId) { setTransferLots([]); return; }
+    setTransferLots([]);
+    setTransferConversions([]);
+    setTransferSourceUnitId("");
+    if (!sourceWarehouseId || !transferInventoryId) return;
     const controller = new AbortController();
-    const query = new URLSearchParams({ warehouseId: sourceWarehouseId, inventoryItemId: transferInventoryId });
+    const query = new URLSearchParams({ warehouseId: sourceWarehouseId, inventoryItemId: transferInventoryId, includeUnitConversions: "1" });
     void fetch(`/api/enterprise/${organizationId}/stock-transfers/lots?${query}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
-        const body = await response.json().catch(() => null) as { items?: typeof transferLots } | null;
+        const body = await response.json().catch(() => null) as { items?: typeof transferLots; conversions?: typeof transferConversions } | null;
         if (!response.ok || !body?.items) throw new Error("STOCK_TRANSFER_LOT_LOOKUP_FAILED");
-        if (!controller.signal.aborted) setTransferLots(body.items);
+        if (!controller.signal.aborted) {
+          setTransferLots(body.items);
+          if (body.conversions) setTransferConversions(body.conversions);
+        }
       })
       .catch(() => { if (!controller.signal.aborted) setTransferLots([]); });
     return () => controller.abort();
@@ -185,7 +222,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
     if (stockLowOnly) value.set("lowStock", "true");
     return value;
   }, [page, search, stockWarehouseId, stockLowOnly]);
-  const stock = useProfessionalCollection<InventoryItem>({ endpoint: `/api/enterprise/${organizationId}/inventory`, params: stockParams, refreshKey });
+  const stock = useProfessionalCollection<InventoryItem, StockAnalytics>({ endpoint: `/api/enterprise/${organizationId}/inventory`, params: stockParams, refreshKey });
   const transfers = useProfessionalCollection<Transfer>({ endpoint: `/api/enterprise/${organizationId}/stock-transfers`, params, refreshKey });
   const counts = useProfessionalCollection<Count>({ endpoint: `/api/enterprise/${organizationId}/inventory-counts`, params, refreshKey });
   const adjustments = useProfessionalCollection<Adjustment>({ endpoint: `/api/enterprise/${organizationId}/stock-adjustments`, params, refreshKey });
@@ -195,14 +232,29 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   const destinationLocations = lookups.locations.filter((item) => item.warehouseId === destinationWarehouseId);
   const countLocations = lookups.locations.filter((item) => item.warehouseId === countWarehouseId);
   const adjustLocations = lookups.locations.filter((item) => item.warehouseId === adjustWarehouseId);
+  const unitsByItem = useMemo(() => new Map(lookups.inventoryItems.map((item) => [item.id, item.unitOfMeasure])), [lookups.inventoryItems]);
+  const selectedTransferConversion = transferConversions.find(row => row.sourceUnitId === transferSourceUnitId);
+  const transferStep = inventoryQuantityStep(selectedTransferConversion?.sourceScale ?? unitsByItem.get(transferInventoryId)?.decimalScale);
+  const countStep = inventoryQuantityStep(unitsByItem.get(countInventoryId)?.decimalScale);
+  const adjustmentStep = inventoryQuantityStep(unitsByItem.get(adjustInventoryId)?.decimalScale);
 
   function resetTransfer() { setSourceWarehouseId(""); setDestinationWarehouseId(""); setTransferInventoryId(""); setTransferLotId(""); }
-  function resetCount() { setCountWarehouseId(""); }
+  function resetCount() { setCountWarehouseId(""); setCountInventoryId(""); }
   function resetAdjustment() { setAdjustWarehouseId(""); setAdjustInventoryId(""); setAdjustLots([]); setAdjustLossReason(""); }
+
+  function readFormQuantity(form: FormData, field: string, positive = true, conversionScale?: number) {
+    const value = String(form.get(field) ?? "").trim();
+    const unit = unitsByItem.get(String(form.get("inventoryItemId") ?? ""));
+    if (isInventoryQuantityInputValid(value, conversionScale ?? unit?.decimalScale, positive)) return value;
+    notifyToast(t("inventory.quantityPrecisionInvalid"), "error");
+    return null;
+  }
 
   async function createTransfer(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const transferQuantity = readFormQuantity(form, "quantity", true, selectedTransferConversion?.sourceScale);
+    if (transferQuantity === null) return;
     setSubmitting(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/stock-transfers`, {
@@ -215,7 +267,8 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
           stockLotId: String(form.get("stockLotId") || "") || null,
           sourceLocationId: String(form.get("sourceLocationId") || "") || null,
           destinationLocationId: String(form.get("destinationLocationId") || "") || null,
-          quantity: Number(form.get("quantity") || 0),
+          quantity: transferQuantity,
+          ...(selectedTransferConversion ? { sourceUnitId: selectedTransferConversion.sourceUnitId, expectedConversionVersion: selectedTransferConversion.version } : {}),
         }],
       });
       setTransferOpen(false); resetTransfer(); setTab("TRANSFERS"); setRefreshKey((value) => value + 1); notifyToast(t("inventory.transferSubmitted"), "success");
@@ -223,9 +276,22 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
     finally { setSubmitting(false); }
   }
 
+  function transferLineQuantity(line: TransferLine) {
+    const conversion = line.unitConversionJson;
+    if (!conversion) return quantity(line.quantity);
+    return t("inventory.transferConversionDetail", {
+      source: quantity(conversion.sourceQuantity, conversion.sourceCode, conversion.sourceScale),
+      stock: quantity(line.quantity, conversion.targetCode, conversion.targetScale),
+      version: conversion.version,
+      factor: localizeInventoryQuantity(conversion.factor, locale),
+    });
+  }
+
   async function createCount(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const countedQuantity = readFormQuantity(form, "countedQuantity", false);
+    if (countedQuantity === null) return;
     setSubmitting(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/inventory-counts`, {
@@ -234,7 +300,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
         countType: String(form.get("countType") || "FULL"),
         approverUserId: String(form.get("approverUserId") || ""),
         notes: String(form.get("notes") || "") || null,
-        lines: [{ inventoryItemId: String(form.get("inventoryItemId") || ""), countedQuantity: Number(form.get("countedQuantity") || 0), notes: String(form.get("lineNotes") || "") || null }],
+        lines: [{ inventoryItemId: String(form.get("inventoryItemId") || ""), countedQuantity, notes: String(form.get("lineNotes") || "") || null }],
       });
       setCountOpen(false); resetCount(); setTab("COUNTS"); setRefreshKey((value) => value + 1); notifyToast(t("inventory.countCreated"), "success");
     } catch (error) { notifyToast({ title: t("inventory.countCreateFailed"), description: error instanceof Error ? error.message : t("inventory.countCreateFailed"), tone: "error" }); }
@@ -244,6 +310,8 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
   async function createAdjustment(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
+    const adjustmentQuantity = readFormQuantity(form, "quantity");
+    if (adjustmentQuantity === null) return;
     setSubmitting(true);
     try {
       await professionalMutation(`/api/enterprise/${organizationId}/stock-adjustments`, {
@@ -253,7 +321,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
         stockLotId: String(form.get("stockLotId") || "") || null,
         adjustmentType: adjustLossReason ? "OUT" : String(form.get("adjustmentType") || "IN"),
         ...(adjustLossReason ? {lossReason:adjustLossReason} : {}),
-        quantity: Number(form.get("quantity") || 0),
+        quantity: adjustmentQuantity,
         reason: String(form.get("reason") || ""),
         approverUserId: String(form.get("approverUserId") || ""),
         idempotencyKey: crypto.randomUUID(),
@@ -367,6 +435,12 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
           </label>
           <label className="flex min-h-11 min-w-0 items-center gap-2 text-sm text-dtsc-ink"><input type="checkbox" checked={stockLowOnly} onChange={(event) => { setStockLowOnly(event.target.checked); setPage(1); }} className="h-4 w-4 shrink-0 accent-sky-600" />{locale === "en" ? "Low physical stock only" : "Stock physique faible uniquement"}</label>
         </div> : null}
+        {tab === "STOCK" && !stock.loading && !stock.error ? <div className="grid min-w-0 gap-3" data-inventory-quantity-totals>
+          {stock.extra.quantityTotals?.length ? <ModuleMetrics label={locale === "fr" ? "Quantités filtrées, toutes pages" : "Filtered quantities, all pages"}>{stock.extra.quantityTotals.map(row => <ErpDesign2Metric key={`${row.unitId}:${row.metric}`} tone="teal" label={`${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`} value={quantity(row.value,row.unit,row.decimalScale)} hint={row.precisionMismatch ? (locale === "fr" ? "Précision historique à vérifier" : "Historical precision needs review") : locale === "fr" ? "Toutes les pages filtrées" : "All filtered pages"} />)}</ModuleMetrics> : <p className="text-sm text-dtsc-muted">{locale === "fr" ? "Aucune quantité dans le résultat filtré." : "No quantities in the filtered result."}</p>}
+          <details className="min-w-0 rounded-xl border border-dtsc-border p-3"><summary className="cursor-pointer text-sm font-semibold text-dtsc-ink">{locale === "fr" ? "Comparer avec le général et la page" : "Compare general and page totals"}</summary>
+            {([["general",stock.extra.generalQuantityTotals],["page",stock.extra.pageQuantityTotals]] as const).map(([scope,rows])=><ModuleMetrics key={scope} label={scope === "general" ? (locale === "fr" ? "Général autorisé sans filtres" : "Authorized general totals without filters") : (locale === "fr" ? "Page affichée" : "Displayed page")}>{(rows||[]).map(row=><ErpDesign2Metric key={`${row.unitId}:${row.metric}`} tone="slate" label={`${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`} value={quantity(row.value,row.unit,row.decimalScale)} hint={scope === "general" ? (locale === "fr" ? "Sans filtres, dépôts autorisés" : "Without filters, authorized warehouses") : (locale === "fr" ? "Page affichée uniquement" : "Displayed page only")} />)}</ModuleMetrics>)}
+          </details>
+        </div> : null}
         <ErpDesign2RegisterTools locale={locale} organizationName={organizationName}
           title={tab === "STOCK" ? t("inventory.stockSection") : tab === "TRANSFERS" ? t("inventory.transferSection") : tab === "COUNTS" ? t("inventory.countSection") : t("inventory.adjustmentSection")}
           endpoint={`/api/enterprise/${organizationId}/${tab === "STOCK" ? "inventory" : tab === "TRANSFERS" ? "stock-transfers" : tab === "COUNTS" ? "inventory-counts" : "stock-adjustments"}`}
@@ -386,9 +460,19 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
             { key: "item", labelFr: "Article", labelEn: "Item", get: (row) => String((row.catalogItem as InventoryItem["catalogItem"] | null)?.name || "") },
             { key: "unit", labelFr: "Unité", labelEn: "Unit", get: (row) => String((row.catalogItem as InventoryItem["catalogItem"] | null)?.unitOfMeasure?.symbol || "") },
             { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => stockStatusLabel(Boolean(row.isLowStock), Number(row.quantityAvailable || 0)) },
-            { key: "onHand", labelFr: "Stock physique", labelEn: "On-hand stock", get: (row) => Number(row.quantityOnHand || 0) },
-            { key: "reserved", labelFr: "Réservations et retenues", labelEn: "Reservations and holds", get: (row) => Number(row.quantityReserved || 0) },
-            { key: "available", labelFr: "Stock vendable", labelEn: "Sellable stock", get: (row) => Number(row.quantityAvailable || 0) },
+            { key: "onHand", labelFr: "Stock physique", labelEn: "On-hand stock", get: (row) => inventoryQuantityExportValue(String(row.quantityOnHandExact ?? row.quantityOnHand ?? 0)) },
+            { key: "reserved", labelFr: "Réservations et retenues", labelEn: "Reservations and holds", get: (row) => inventoryQuantityExportValue(String(row.quantityReservedExact ?? row.quantityReserved ?? 0)) },
+            { key: "available", labelFr: "Stock vendable", labelEn: "Sellable stock", get: (row) => inventoryQuantityExportValue(String(row.quantityAvailableExact ?? row.quantityAvailable ?? 0)) },
+          ] : tab === "TRANSFERS" ? [
+            { key: "reference", labelFr: "Référence", labelEn: "Reference", get: row => String(row.reference || "") },
+            { key: "status", labelFr: "Statut", labelEn: "Status", get: row => professionalErpEnumLabel(locale, "inventoryStatus", String(row.status || "")) },
+            { key: "source", labelFr: "Entrepôt origine", labelEn: "Source warehouse", get: row => String((row.sourceWarehouse as Transfer["sourceWarehouse"] | null)?.name || "") },
+            { key: "destination", labelFr: "Entrepôt destination", labelEn: "Destination warehouse", get: row => String((row.destinationWarehouse as Transfer["destinationWarehouse"] | null)?.name || "") },
+            { key: "requested", labelFr: "Date de demande", labelEn: "Requested at", get: row => String(row.requestedAt || "") },
+            { key: "quantities", labelFr: "Articles et quantités", labelEn: "Items and quantities", get: row => ((row.lines || []) as TransferLine[]).map(line => {
+              const item = line.inventoryItem?.catalogItem;
+              return [item?.code, item?.name, transferLineQuantity(line)].filter(Boolean).join(" · ");
+            }).join(" | ") },
           ] : [
             { key: "reference", labelFr: "Référence / Code", labelEn: "Reference / Code", get: (row) => String(row.reference || (row.catalogItem as { code?: string } | null)?.code || "") },
             { key: "item", labelFr: "Article", labelEn: "Item", get: (row) => String((row.catalogItem as { name?: string } | null)?.name || (row.inventoryItem as { catalogItem?: { name?: string } } | null)?.catalogItem?.name || "") },
@@ -402,7 +486,7 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
             { key: "requested", labelFr: "Date de demande", labelEn: "Requested at", get: (row) => String(row.requestedAt || row.createdAt || "") },
           ]} />
          {activeCollection.error ? <ProfessionalError message={activeCollection.error} /> : activeCollection.loading ? <ProfessionalLoading /> : tab === "STOCK" ? (
-          stock.items.length ? <BusinessList ariaLabel={t("inventory.stockAria")}>{stock.items.map((item) => <BusinessListItem key={item.id} title={`${item.catalogItem.code} · ${item.catalogItem.name}`} status={<StatusBadge tone={item.isLowStock ? "danger" : item.quantityAvailable > 0 ? "success" : "warning"}>{stockStatusLabel(item.isLowStock, item.quantityAvailable)}</StatusBadge>} meta={`${t("inventory.availableQuantity", { value: quantity(item.quantityAvailable, item.catalogItem.unitOfMeasure?.symbol) })} · ${t("inventory.reservedQuantity", { value: quantity(item.quantityReserved, item.catalogItem.unitOfMeasure?.symbol) })}`} description={item.balances.map((balance) => `${balance.warehouse.name}${balance.storageLocation ? ` / ${balance.storageLocation.name}` : ""}: ${quantity(balance.quantityOnHand, item.catalogItem.unitOfMeasure?.symbol)}`).join(" · ") || t("inventory.noBalance")} onOpen={() => setDetail(item)} openLabel={t("inventory.openStock", { name: item.catalogItem.name })} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTrackedItem")} description={t("inventory.noTrackedItemDescription")} />
+          stock.items.length ? <BusinessList ariaLabel={t("inventory.stockAria")}>{stock.items.map((item) => <BusinessListItem key={item.id} title={`${item.catalogItem.code} · ${item.catalogItem.name}`} status={<StatusBadge tone={item.isLowStock ? "danger" : item.quantityAvailable > 0 ? "success" : "warning"}>{stockStatusLabel(item.isLowStock, item.quantityAvailable)}</StatusBadge>} meta={`${t("inventory.availableQuantity", { value: quantity(item.quantityAvailableExact ?? item.quantityAvailable, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale) })} · ${t("inventory.reservedQuantity", { value: quantity(item.quantityReservedExact ?? item.quantityReserved, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale) })}`} description={item.balances.map((balance) => `${balance.warehouse.name}${balance.storageLocation ? ` / ${balance.storageLocation.name}` : ""}: ${quantity(balance.quantityOnHand, item.catalogItem.unitOfMeasure?.symbol, item.catalogItem.unitOfMeasure?.decimalScale)}`).join(" · ") || t("inventory.noBalance")} onOpen={() => setDetail(item)} openLabel={t("inventory.openStock", { name: item.catalogItem.name })} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTrackedItem")} description={t("inventory.noTrackedItemDescription")} />
         ) : tab === "TRANSFERS" ? (
           transfers.items.length ? <BusinessList ariaLabel={t("inventory.transfersAria")}>{transfers.items.map((item) => <BusinessListItem key={item.id} title={item.reference} leading={<Truck className="h-5 w-5 text-dtsc-blue" />} status={<StatusBadge tone={statusTone(item.status)}>{professionalErpEnumLabel(locale, "inventoryStatus", item.status)}</StatusBadge>} meta={`${item.sourceWarehouse.name} → ${item.destinationWarehouse.name}`} description={`${t("inventory.lines", { count: item.lines.length, suffix: suffix(item.lines.length) })} · ${t("inventory.requestedOn", { date: professionalErpDate(item.requestedAt, locale) })}`} onOpen={() => setDetail(item)} actions={<ContextActions label={t("inventory.transferActions")} actions={transferActions(item)} />} />)}</BusinessList> : <EmptyState compact title={t("inventory.noTransfer")} description={t("inventory.noTransferDescription")} />
         ) : tab === "COUNTS" ? (
@@ -413,9 +497,18 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
       <ProfessionalHelp moduleCode="INVENTORY_LOGISTICS" />
     </ModuleContent>
 
-    <Dialog presentation="editor" open={transferOpen} onClose={() => { setTransferOpen(false); resetTransfer(); }} title={t("inventory.newTransferTitle")} description={t("inventory.newTransferDescription")} className="max-w-4xl"><form onSubmit={createTransfer} className="grid gap-5"><ProfessionalFormSection title={t("inventory.route")}><Field label={t("inventory.sourceWarehouse")}><NativeSelect name="sourceWarehouseId" required value={sourceWarehouseId} onChange={setSourceWarehouseId} items={warehouseItems} /></Field><Field label={t("inventory.targetWarehouse")}><NativeSelect name="destinationWarehouseId" required value={destinationWarehouseId} onChange={setDestinationWarehouseId} items={warehouseItems.filter((item) => !item.id || item.id !== sourceWarehouseId)} /></Field><Field label={t("inventory.approver")}><NativeSelect name="approverUserId" required items={approverItems} /></Field><Field label={t("inventory.reason")}><Input name="notes" /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("inventory.itemAndQuantity")}><Field label={t("inventory.item")}><NativeSelect name="inventoryItemId" required value={transferInventoryId} onChange={setTransferInventoryId} items={inventoryItemChoices} /></Field><Field label={t("inventory.quantity")}><Input name="quantity" type="number" min="0.001" step="0.001" required /></Field><Field label={locale === "fr" ? "Lot de départ" : "Source batch"}><NativeSelect name="stockLotId" value={transferLotId} onChange={setTransferLotId} items={[{ id: "", label: locale === "fr" ? "Sans lot / lot non suivi" : "No batch / not batch-tracked" }, ...transferLots.filter((lot) => Number(lot.quantityAvailable) > 0).map((lot) => ({ id: lot.id, label: `${lot.lotNumber} · ${lot.quantityAvailable}${lot.expiryDate ? ` · ${professionalErpDate(lot.expiryDate, locale)}` : ""}` }))]} disabled={!transferInventoryId || !sourceWarehouseId} /></Field><Field label={t("inventory.sourceLocation")}><NativeSelect name="sourceLocationId" disabled={!sourceWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...sourceLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field><Field label={t("inventory.targetLocation")}><NativeSelect name="destinationLocationId" disabled={!destinationWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...destinationLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setTransferOpen(false); resetTransfer(); }}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting || !sourceWarehouseId || !destinationWarehouseId}>{submitting ? t("common.submitting") : t("inventory.submitTransfer")}</Button></div></form></Dialog>
+    <Dialog presentation="editor" open={transferOpen} onClose={() => { setTransferOpen(false); resetTransfer(); }} title={t("inventory.newTransferTitle")} description={t("inventory.newTransferDescription")} className="max-w-4xl"><form onSubmit={createTransfer} className="grid gap-5"><ProfessionalFormSection title={t("inventory.route")}><Field label={t("inventory.sourceWarehouse")}><NativeSelect name="sourceWarehouseId" required value={sourceWarehouseId} onChange={setSourceWarehouseId} items={warehouseItems} /></Field><Field label={t("inventory.targetWarehouse")}><NativeSelect name="destinationWarehouseId" required value={destinationWarehouseId} onChange={setDestinationWarehouseId} items={warehouseItems.filter((item) => !item.id || item.id !== sourceWarehouseId)} /></Field><Field label={t("inventory.approver")}><NativeSelect name="approverUserId" required items={approverItems} /></Field><Field label={t("inventory.reason")}><Input name="notes" /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("inventory.itemAndQuantity")}><Field label={t("inventory.item")}><NativeSelect name="inventoryItemId" required value={transferInventoryId} onChange={setTransferInventoryId} items={inventoryItemChoices} /></Field>{transferConversions.length ? <Field label={t("inventory.transferInputUnit")} help={selectedTransferConversion ? t("inventory.transferConversionRatio", {
+          source: selectedTransferConversion.sourceCode, target: selectedTransferConversion.targetCode,
+          factor: localizeInventoryQuantity(selectedTransferConversion.factor, locale), version: selectedTransferConversion.version,
+        }) : undefined}>
+          <NativeSelect value={transferSourceUnitId} onChange={setTransferSourceUnitId} items={[
+            { id: "", label: t("inventory.transferStockUnit") },
+            ...transferConversions.map(unit => ({ id: unit.sourceUnitId, label: unit.sourceName + " · " + unit.sourceCode })),
+          ]} />
+        </Field> : null}
+        <Field label={t("inventory.quantity")}><Input key={transferSourceUnitId || "stock"} name="quantity" type="number" min={transferStep} step={transferStep} max="1000000000" inputMode="decimal" disabled={!transferStep} required /></Field><Field label={locale === "fr" ? "Lot de départ" : "Source batch"}><NativeSelect name="stockLotId" value={transferLotId} onChange={setTransferLotId} items={[{ id: "", label: locale === "fr" ? "Sans lot / lot non suivi" : "No batch / not batch-tracked" }, ...transferLots.filter((lot) => Number(lot.quantityAvailable) > 0).map((lot) => ({ id: lot.id, label: `${lot.lotNumber} · ${lot.quantityAvailable}${lot.expiryDate ? ` · ${professionalErpDate(lot.expiryDate, locale)}` : ""}` }))]} disabled={!transferInventoryId || !sourceWarehouseId} /></Field><Field label={t("inventory.sourceLocation")}><NativeSelect name="sourceLocationId" disabled={!sourceWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...sourceLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field><Field label={t("inventory.targetLocation")}><NativeSelect name="destinationLocationId" disabled={!destinationWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...destinationLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setTransferOpen(false); resetTransfer(); }}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting || !sourceWarehouseId || !destinationWarehouseId || !transferStep}>{submitting ? t("common.submitting") : t("inventory.submitTransfer")}</Button></div></form></Dialog>
 
-    <Dialog presentation="editor" open={countOpen} onClose={() => { setCountOpen(false); resetCount(); }} title={t("inventory.newCountTitle")} className="max-w-4xl"><form onSubmit={createCount} className="grid gap-5"><ProfessionalFormSection title={t("inventory.scopeResponsibility")}><Field label={t("inventory.warehouse")}><NativeSelect name="warehouseId" required value={countWarehouseId} onChange={setCountWarehouseId} items={warehouseItems} /></Field><Field label={t("inventory.sourceLocation")}><NativeSelect name="storageLocationId" disabled={!countWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...countLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field><Field label={t("inventory.countType")}><NativeSelect name="countType" defaultValue="FULL" items={countTypeItems} /></Field><Field label={t("inventory.approver")}><NativeSelect name="approverUserId" required items={approverItems} /></Field><Field label={t("inventory.notes")}><Input name="notes" /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("inventory.firstCount")}><Field label={t("inventory.item")}><NativeSelect name="inventoryItemId" required items={inventoryItemChoices} /></Field><Field label={t("inventory.countedQuantity")}><Input name="countedQuantity" type="number" min="0" step="0.001" required /></Field><Field label={t("inventory.observation")}><Input name="lineNotes" /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setCountOpen(false); resetCount(); }}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting || !countWarehouseId}>{submitting ? t("common.submitting") : t("inventory.createCount")}</Button></div></form></Dialog>
+    <Dialog presentation="editor" open={countOpen} onClose={() => { setCountOpen(false); resetCount(); }} title={t("inventory.newCountTitle")} className="max-w-4xl"><form onSubmit={createCount} className="grid gap-5"><ProfessionalFormSection title={t("inventory.scopeResponsibility")}><Field label={t("inventory.warehouse")}><NativeSelect name="warehouseId" required value={countWarehouseId} onChange={setCountWarehouseId} items={warehouseItems} /></Field><Field label={t("inventory.sourceLocation")}><NativeSelect name="storageLocationId" disabled={!countWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...countLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field><Field label={t("inventory.countType")}><NativeSelect name="countType" defaultValue="FULL" items={countTypeItems} /></Field><Field label={t("inventory.approver")}><NativeSelect name="approverUserId" required items={approverItems} /></Field><Field label={t("inventory.notes")}><Input name="notes" /></Field></ProfessionalFormSection><ProfessionalFormSection title={t("inventory.firstCount")}><Field label={t("inventory.item")}><NativeSelect name="inventoryItemId" required value={countInventoryId} onChange={setCountInventoryId} items={inventoryItemChoices} /></Field><Field label={t("inventory.countedQuantity")}><Input name="countedQuantity" type="number" min="0" step={countStep} max="1000000000" inputMode="decimal" disabled={!countStep} required /></Field><Field label={t("inventory.observation")}><Input name="lineNotes" /></Field></ProfessionalFormSection><div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setCountOpen(false); resetCount(); }}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting || !countWarehouseId || !countStep}>{submitting ? t("common.submitting") : t("inventory.createCount")}</Button></div></form></Dialog>
 
     <Dialog presentation="editor" open={adjustOpen} onClose={() => { setAdjustOpen(false); resetAdjustment(); }} title={t("inventory.controlledAdjustment")} description={t("inventory.controlledAdjustmentDescription")} className="max-w-3xl">
       <form onSubmit={createAdjustment} className="grid gap-5">
@@ -426,25 +519,29 @@ export function EnterpriseInventoryOperationsWorkspace({ organizationId, organiz
           <Field label={locale === "fr" ? "Lot d'entrée ou de sortie" : "Batch received or dispatched"} help={locale === "fr" ? "Sélectionnez le lot avec sa date de péremption. Obligatoire pour un produit suivi par lot ou péremption." : "Choose a batch and its expiry date. Required for batch/expiry-tracked items."}><NativeSelect key={adjustLossReason || "normal"} name="stockLotId" required={Boolean(adjustLossReason)} disabled={!adjustInventoryId || !adjustWarehouseId} items={[{ id: "", label: adjustLossReason ? (locale==="fr"?"Choisir un lot":"Choose batch") : (locale === "fr" ? "Sans lot" : "No batch") }, ...adjustLots.map((lot) => ({ id: lot.id, label: `${lot.lotNumber} · ${lot.quantityAvailable}${lot.expiryDate ? ` · ${professionalErpDate(lot.expiryDate, locale)}` : ""}${lot.status === "QUARANTINED" ? (locale==="fr"?" · Quarantaine":" · Quarantine") : lot.status === "BLOCKED" ? (locale==="fr"?" · Bloqué":" · Blocked") : ""}` }))]} /></Field>
           <Field label={t("inventory.sourceLocation")}><NativeSelect name="storageLocationId" disabled={!adjustWarehouseId} items={[{ id: "", label: t("inventory.notSpecified") }, ...adjustLocations.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}` }))]} /></Field>
           <Field label={t("inventory.direction")}>{adjustLossReason ? <p className="text-sm font-semibold text-dtsc-ink">{locale==="fr"?"Sortie pour perte":"Loss write-off"}</p> : <NativeSelect name="adjustmentType" defaultValue="IN" items={adjustmentItems} />}</Field>
-          <Field label={t("inventory.quantity")}><Input name="quantity" type="number" min="0.001" step="0.001" required /></Field>
+          <Field label={t("inventory.quantity")}><Input name="quantity" type="number" min={adjustmentStep} step={adjustmentStep} max="1000000000" inputMode="decimal" disabled={!adjustmentStep} required /></Field>
           <Field label={t("inventory.reason")}><Input name="reason" minLength={adjustLossReason ? 8 : 3} required /></Field>
           <Field label={t("inventory.approver")}><NativeSelect name="approverUserId" required items={approverItems} /></Field>
         </ProfessionalFormSection>
-        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setAdjustOpen(false); resetAdjustment(); }}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting || !adjustWarehouseId}>{submitting ? t("common.submitting") : t("inventory.submitAdjustment")}</Button></div>
+        <div className="sticky bottom-0 flex justify-end gap-2 border-t border-dtsc-border bg-dtsc-surface py-3"><Button type="button" variant="outline" onClick={() => { setAdjustOpen(false); resetAdjustment(); }}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting || !adjustWarehouseId || !adjustmentStep}>{submitting ? t("common.submitting") : t("inventory.submitAdjustment")}</Button></div>
       </form>
     </Dialog>
 
-    <Dialog presentation="editor" open={Boolean(detail)} onClose={() => setDetail(null)} title={detail && "reference" in detail ? detail.reference : detail && "catalogItem" in detail ? detail.catalogItem.name : t("inventory.operationalDetail")} className="max-w-4xl">{detail && "catalogItem" in detail ? <BusinessList ariaLabel={t("inventory.balancesAria")}>{detail.balances.map((balance) => <BusinessListItem key={balance.id} title={`${balance.warehouse.code} · ${balance.warehouse.name}`} meta={balance.storageLocation ? `${balance.storageLocation.code} · ${balance.storageLocation.name}` : t("inventory.noLocation")} description={balance.stockLot ? `${t("inventory.lot", { number: balance.stockLot.lotNumber })}${balance.stockLot.expiryDate ? ` · ${t("inventory.expiresOn", { date: professionalErpDate(balance.stockLot.expiryDate, locale) })}` : ""}` : t("inventory.noLot")} status={<StatusBadge>{quantity(balance.quantityOnHand)}</StatusBadge>} />)}</BusinessList> : detail && "sourceWarehouse" in detail ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{detail.sourceWarehouse.name} → {detail.destinationWarehouse.name}</p><BusinessList ariaLabel={t("inventory.transferLines")}>{detail.lines.map((line) => <BusinessListItem key={line.id} title={lookups.inventoryItems.find((item) => item.id === line.inventoryItemId)?.name || t("inventory.item")} status={<StatusBadge>{quantity(line.quantity)}</StatusBadge>} />)}</BusinessList></div> : detail && "countType" in detail ? <BusinessList ariaLabel={t("inventory.inventoryVariances")}>{detail.lines.map((line) => <BusinessListItem key={line.id} title={lookups.inventoryItems.find((item) => item.id === line.inventoryItemId)?.name || t("inventory.item")} meta={`${t("inventory.theoretical", { value: professionalErpNumber(line.expectedQuantity, locale) })} · ${t("inventory.counted", { value: line.countedQuantity == null ? "—" : professionalErpNumber(line.countedQuantity, locale) })}`} status={<StatusBadge tone={Number(line.varianceQuantity || 0) === 0 ? "success" : "warning"}>{t("inventory.variance", { value: line.varianceQuantity == null ? "—" : professionalErpNumber(line.varianceQuantity, locale) })}</StatusBadge>} />)}</BusinessList> : detail && "adjustmentType" in detail ? <div className="grid gap-3 text-sm"><p><strong>{t("inventory.item")}:</strong> {detail.inventoryItem?.catalogItem?.name || lookups.inventoryItems.find((item) => item.id === detail.inventoryItemId)?.name || "—"}</p><p><strong>{t("inventory.direction")}:</strong> {professionalErpEnumLabel(locale, "adjustmentType", detail.adjustmentType)}</p><p><strong>{t("inventory.quantity")}:</strong> {quantity(detail.quantity)}</p><p><strong>{t("inventory.reason")}:</strong> {detail.reason}</p><StatusBadge tone={statusTone(detail.status)}>{professionalErpEnumLabel(locale, "inventoryStatus", detail.status)}</StatusBadge></div> : null}</Dialog>
+    <Dialog presentation="editor" open={Boolean(detail)} onClose={() => setDetail(null)} title={detail && "reference" in detail ? detail.reference : detail && "catalogItem" in detail ? detail.catalogItem.name : t("inventory.operationalDetail")} className="max-w-4xl">{detail && "catalogItem" in detail ? <BusinessList ariaLabel={t("inventory.balancesAria")}>{detail.balances.map((balance) => <BusinessListItem key={balance.id} title={`${balance.warehouse.code} · ${balance.warehouse.name}`} meta={balance.storageLocation ? `${balance.storageLocation.code} · ${balance.storageLocation.name}` : t("inventory.noLocation")} description={balance.stockLot ? `${t("inventory.lot", { number: balance.stockLot.lotNumber })}${balance.stockLot.expiryDate ? ` · ${t("inventory.expiresOn", { date: professionalErpDate(balance.stockLot.expiryDate, locale) })}` : ""}` : t("inventory.noLot")} status={<StatusBadge>{quantity(balance.quantityOnHand, detail.catalogItem.unitOfMeasure?.symbol, detail.catalogItem.unitOfMeasure?.decimalScale)}</StatusBadge>} />)}</BusinessList> : detail && "sourceWarehouse" in detail ? <div className="grid gap-4"><p className="text-sm text-dtsc-muted">{detail.sourceWarehouse.name} → {detail.destinationWarehouse.name}</p><BusinessList ariaLabel={t("inventory.transferLines")}>{detail.lines.map((line) => <BusinessListItem key={line.id} title={lookups.inventoryItems.find((item) => item.id === line.inventoryItemId)?.name || t("inventory.item")} description={transferLineQuantity(line)} />)}</BusinessList></div> : detail && "countType" in detail ? <BusinessList ariaLabel={t("inventory.inventoryVariances")}>{detail.lines.map((line) => <BusinessListItem key={line.id} title={lookups.inventoryItems.find((item) => item.id === line.inventoryItemId)?.name || t("inventory.item")} meta={`${t("inventory.theoretical", { value: quantity(line.expectedQuantity) })} · ${t("inventory.counted", { value: line.countedQuantity == null ? "—" : quantity(line.countedQuantity) })}`} status={<StatusBadge tone={Number(line.varianceQuantity || 0) === 0 ? "success" : "warning"}>{t("inventory.variance", { value: line.varianceQuantity == null ? "—" : quantity(line.varianceQuantity) })}</StatusBadge>} />)}</BusinessList> : detail && "adjustmentType" in detail ? <div className="grid gap-3 text-sm"><p><strong>{t("inventory.item")}:</strong> {detail.inventoryItem?.catalogItem?.name || lookups.inventoryItems.find((item) => item.id === detail.inventoryItemId)?.name || "—"}</p><p><strong>{t("inventory.direction")}:</strong> {professionalErpEnumLabel(locale, "adjustmentType", detail.adjustmentType)}</p><p><strong>{t("inventory.quantity")}:</strong> {quantity(detail.quantity)}</p><p><strong>{t("inventory.reason")}:</strong> {detail.reason}</p><StatusBadge tone={statusTone(detail.status)}>{professionalErpEnumLabel(locale, "inventoryStatus", detail.status)}</StatusBadge></div> : null}</Dialog>
 
     <Dialog open={Boolean(decisionTarget)} onClose={() => !submitting && setDecisionTarget(null)} title={decisionTarget?.decision === "APPROVE" ? t("inventory.reviewApprove") : t("inventory.reviewReject")} description={t("inventory.decisionReviewDescription")} presentation="editor">
-      {decisionTarget ? <form onSubmit={decide} className="grid gap-4"><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{"reference" in decisionTarget.entity ? decisionTarget.entity.reference : "—"}</strong><p className="mt-1 text-dtsc-muted">{decisionTarget.kind === "TRANSFER" ? t("inventory.transferKind") : decisionTarget.kind === "COUNT" ? t("inventory.countKind") : t("inventory.adjustmentKind")}</p></div><Field label={decisionTarget.decision === "REJECT" ? t("inventory.rejectionReason") : t("inventory.decisionComment")}><textarea name="comment" required={decisionTarget.decision === "REJECT"} className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={submitting} onClick={() => setDecisionTarget(null)}>{t("inventory.cancel")}</Button><Button type="submit" variant={decisionTarget.decision === "REJECT" ? "destructive" : "default"} disabled={submitting}>{submitting ? t("common.saving") : decisionTarget.decision === "APPROVE" ? t("inventory.approve") : t("inventory.reject")}</Button></div></form> : null}
+      {decisionTarget ? <form onSubmit={decide} className="grid gap-4"><div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm"><strong>{"reference" in decisionTarget.entity ? decisionTarget.entity.reference : "—"}</strong><p className="mt-1 text-dtsc-muted">{decisionTarget.kind === "TRANSFER" ? t("inventory.transferKind") : decisionTarget.kind === "COUNT" ? t("inventory.countKind") : t("inventory.adjustmentKind")}</p>
+          {"sourceWarehouse" in decisionTarget.entity && decisionTarget.entity.lines.map(line => (
+            <p key={line.id} className="mt-2 break-words">{lookups.inventoryItems.find(item => item.id === line.inventoryItemId)?.name || t("inventory.item")} · {transferLineQuantity(line)}</p>
+          ))}
+        </div><Field label={decisionTarget.decision === "REJECT" ? t("inventory.rejectionReason") : t("inventory.decisionComment")}><textarea name="comment" required={decisionTarget.decision === "REJECT"} className="min-h-28 rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base" /></Field><div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={submitting} onClick={() => setDecisionTarget(null)}>{t("inventory.cancel")}</Button><Button type="submit" variant={decisionTarget.decision === "REJECT" ? "destructive" : "default"} disabled={submitting}>{submitting ? t("common.saving") : decisionTarget.decision === "APPROVE" ? t("inventory.approve") : t("inventory.reject")}</Button></div></form> : null}
     </Dialog>
     <Dialog open={Boolean(receiptTarget)} onClose={() => !submitting && setReceiptTarget(null)} title={locale === "fr" ? "Réception physique du transfert" : "Physical transfer receipt"} description={locale === "fr" ? "Confirmez uniquement les marchandises réellement reçues. Cette action ajoutera le stock à la boutique destinataire et sera journalisée." : "Confirm only goods that were physically received. This adds stock to the destination and is recorded in the audit trail."} presentation="editor">
       {receiptTarget ? <form onSubmit={receiveTransfer} className="grid gap-4">
         <div className="rounded-xl border border-dtsc-border bg-dtsc-page p-4 text-sm text-dtsc-ink">
           <p className="font-bold">{receiptTarget.reference}</p>
           <p className="mt-2 text-dtsc-muted">{receiptTarget.sourceWarehouse.name} → {receiptTarget.destinationWarehouse.name}</p>
-          {receiptTarget.lines.map((line) => <p key={line.id} className="mt-2">{lookups.inventoryItems.find((item) => item.id === line.inventoryItemId)?.name || line.inventoryItemId} · {quantity(line.quantity)}</p>)}
+          {receiptTarget.lines.map((line) => <p key={line.id} className="mt-2">{lookups.inventoryItems.find((item) => item.id === line.inventoryItemId)?.name || line.inventoryItemId} · {transferLineQuantity(line)}</p>)}
         </div>
         <Field label={locale === "fr" ? "Observation de réception" : "Receipt note"}><textarea name="comment" maxLength={2000} className="min-h-24 w-full rounded-xl border border-dtsc-border bg-dtsc-surface p-3 text-base text-dtsc-ink" /></Field>
         <div className="flex justify-end gap-2"><Button type="button" variant="outline" disabled={submitting} onClick={() => setReceiptTarget(null)}>{t("inventory.cancel")}</Button><Button type="submit" disabled={submitting}>{submitting ? t("common.saving") : locale === "fr" ? "Confirmer la réception" : "Confirm receipt"}</Button></div>

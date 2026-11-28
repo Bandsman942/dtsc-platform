@@ -30,16 +30,20 @@ export async function GET(req: Request, { params }: Params) {
       { supplierInvoice: { number: { contains: search, mode: "insensitive" } } },
     ] } : {}),
   };
-  const [items, total] = await Promise.all([
-    prisma.enterpriseSupplierCreditNote.findMany({
+  const [items, total, filtered] = await prisma.$transaction(async tx => {
+    const result = await Promise.all([
+    tx.enterpriseSupplierCreditNote.findMany({
       where,
       orderBy: [{ creditDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { supplierInvoice: true },
     }),
-    prisma.enterpriseSupplierCreditNote.count({ where }),
-  ]);
+    tx.enterpriseSupplierCreditNote.count({ where }),
+    tx.enterpriseSupplierCreditNote.groupBy({ by: ["currencyCode", "status"], where, _sum: { grandTotal: true, taxTotal: true } }),
+    ]);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   const approvals = items.length ? await prisma.enterpriseApproval.findMany({
     where: {
@@ -68,7 +72,10 @@ export async function GET(req: Request, { params }: Params) {
   }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "supplier-credit-notes", page, recordId: Boolean(recordId) } });
-  return NextResponse.json({ items: resultItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json({ items: resultItems, filteredTotals: filtered.flatMap(row => [
+      { currencyCode: row.currencyCode, status: row.status, metric: "creditTotal", amount: row._sum.grandTotal?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "tax", amount: row._sum.taxTotal?.toFixed() ?? "0" },
+    ]), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {

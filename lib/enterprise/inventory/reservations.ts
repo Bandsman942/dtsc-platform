@@ -8,6 +8,7 @@ import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/inv
 import { prisma } from "@/lib/prisma";
 import { consumeReservationLotAllocations, planReservationLotAllocations, readReservationLotAllocations } from "@/lib/enterprise/inventory/lot-allocation";
 import { businessDateKey, lotIsExpired } from "@/lib/enterprise/retail/inventory-policy";
+import { exactInventoryQuantity, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 type ReservationCreateInput = z.infer<typeof inventoryReservationCreateSchema>;
 
@@ -31,7 +32,7 @@ type AvailabilityRow = {
 };
 
 function decimal(value: Prisma.Decimal.Value = 0) {
-  return new Prisma.Decimal(value);
+  return exactInventoryQuantity(value);
 }
 
 function activeReservationWhere(
@@ -182,14 +183,15 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
     const catalogItemId = orderItem.catalogItemId;
     const inventoryItem = await tx.enterpriseInventoryItem.findFirst({
       where: { organizationId, catalogItemId, status: "ACTIVE", archivedAt: null, catalogItem: { organizationId, trackInventory: true, status: "ACTIVE", archivedAt: null } },
-      select: { id: true, lotTracking: true, expiryTracking: true },
+      select: { id: true, lotTracking: true, expiryTracking: true, catalogItem: { select: { unitOfMeasure: { select: { decimalScale: true } } } } },
     });
     if (!inventoryItem) throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND", 404);
+    requireInventoryQuantity(input.quantity, inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
     await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,catalogItemId);
 
     if (options?.requireTracked && !inventoryItem.lotTracking && !inventoryItem.expiryTracking) throw new EnterpriseDomainError("INVENTORY_RESERVATION_TRACKED_ITEM_REQUIRED", 409);
     const orderPromises = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, salesOrderItemId: input.salesOrderItemId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true } });
-    const alreadyPromised = orderPromises.reduce((sum, row) => sum.plus(row.quantity.minus(row.fulfilledQuantity)), decimal());
+    const alreadyPromised = orderPromises.reduce((sum, row) => sum.plus(exactInventoryQuantity(row.quantity).minus(row.fulfilledQuantity)), decimal());
     if (alreadyPromised.plus(input.quantity).gt(remainingOrderQuantity)) throw new EnterpriseDomainError("RESERVATION_EXCEEDS_ORDER_REMAINING", 409);
     const [balances, activeReservations, retailHolds] = await Promise.all([
       tx.enterpriseInventoryBalance.findMany({
@@ -231,7 +233,7 @@ export async function createEnterpriseInventoryReservation(organizationId: strin
         tx.enterpriseSectorInventoryEvent.count({ where: { organizationId, catalogItemId } }),
       ]);
       if (pharmacyMapping || sectorEvents) throw new EnterpriseDomainError("INVENTORY_RESERVATION_SECTOR_AUTHORITY", 409);
-      if (decimal(input.quantity).decimalPlaces() > 3) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
+      if (decimal(input.quantity).decimalPlaces() > 6) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
       const [trackedBalances, organization] = await Promise.all([
         tx.enterpriseInventoryBalance.findMany({
           where: { organizationId, inventoryItemId: inventoryItem.id, warehouseId: input.warehouseId, stockLotId: { not: null }, quantityOnHand: { gt: 0 }, OR: [{ storageLocationId: null }, { storageLocation: { status: "ACTIVE", archivedAt: null } }] },
@@ -314,7 +316,7 @@ export async function consumeEnterpriseInventoryReservationsTx(
       if (reservationRemaining.lte(0)) continue;
       const consumeQuantity = Prisma.Decimal.min(reservationRemaining, remainingToFulfill);
       const allocations = readReservationLotAllocations(reservation);
-      if (allocations && consumeQuantity.decimalPlaces() > 3) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
+      if (allocations && consumeQuantity.decimalPlaces() > 6) throw new EnterpriseDomainError("INVENTORY_RESERVATION_ALLOCATION_INVALID", 400);
       const split = allocations ? consumeReservationLotAllocations(allocations, consumeQuantity) : null;
       if (!split) {
         // Historical reservations are never assigned an invented lot. They

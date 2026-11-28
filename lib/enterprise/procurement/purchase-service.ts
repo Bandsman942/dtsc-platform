@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { exactInventoryQuantity, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
 import { EnterpriseCoreV2Error } from "@/lib/enterprise/core-v2/errors";
@@ -31,13 +32,13 @@ type PurchaseUpdateInput = z.infer<typeof enterprisePurchaseUpdateSchema>;
 type PurchaseActionInput = z.infer<typeof enterprisePurchaseActionSchema>;
 type PurchaseReceiptInput = z.infer<typeof enterprisePurchaseReceiptSchema>;
 type PurchaseItemInput = PurchaseCreateInput["items"][number];
-type PurchaseItemCatalogLinkDraft = { catalogItemId: string; unitOfMeasureId: string; expectedItemType: string; sortOrder: number };
+type PurchaseItemCatalogLinkDraft = { catalogItemId: string; unitOfMeasureId: string; expectedItemType: string; sortOrder: number; unitDecimalScale?: number | null; unitCodeSnapshot?: string | null };
 
 function dateOrNull(value?: string | null) { return value ? new Date(value) : null; }
 function purchaseReference(businessDate: string) { return `PUR-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
 function receiptReference(businessDate: string) { return `REC-${businessDate.replace(/-/g, "")}-${randomUUID().slice(0, 8).toUpperCase()}`; }
 function money(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(2); }
-function quantity(value: number | string | Prisma.Decimal) { return new Prisma.Decimal(value).toDecimalPlaces(3); }
+function quantity(value: number | string | Prisma.Decimal) { return requireInventoryQuantity(value, 6); }
 
 function approvalError(error: unknown, fallback: string) {
   const code = error && typeof error === "object" && "code" in error ? String(error.code) : fallback;
@@ -60,14 +61,14 @@ async function preparePurchaseItems(tx: ProcurementTransaction, organizationId: 
     const item = items[index];
     const catalogItem = await tx.enterpriseCatalogItem.findFirst({
       where: { id: item.catalogItemId, organizationId, status: "ACTIVE", archivedAt: null },
-      include: { unitOfMeasure: { select: { id: true, code: true, symbol: true } } },
+      include: { unitOfMeasure: { select: { id: true, code: true, symbol: true, decimalScale: true } } },
     });
     if (!catalogItem) throw new EnterpriseCoreV2Error("L’article sélectionné n’appartient pas au catalogue actif de cette entreprise.", 400, "INVALID_PURCHASE_CATALOG_ITEM");
     const hasSourceType = Boolean(nullable(item.sourceEntityType));
     const hasSourceId = Boolean(nullable(item.sourceEntityId));
     if (hasSourceType !== hasSourceId) throw new EnterpriseCoreV2Error("La source d’une ligne doit préciser type et identifiant.", 400, "INCOMPLETE_PURCHASE_ITEM_SOURCE");
     if (hasSourceType && hasSourceId && !(await enterpriseSourceEntityExists(tx, organizationId, item.sourceEntityType!, item.sourceEntityId!))) throw new EnterpriseCoreV2Error("Une ligne d’achat référence un objet d’une autre organisation.", 400, "CROSS_TENANT_PURCHASE_ITEM_SOURCE");
-    const itemQuantity = quantity(item.quantity);
+    const itemQuantity = requireInventoryQuantity(item.quantity, catalogItem.unitOfMeasure.decimalScale, { positive: true });
     const unitPrice = money(item.unitPrice);
     const taxRate = new Prisma.Decimal(item.taxRate || 0).toDecimalPlaces(4);
     const lineSubtotal = itemQuantity.mul(unitPrice).toDecimalPlaces(2);
@@ -77,7 +78,7 @@ async function preparePurchaseItems(tx: ProcurementTransaction, organizationId: 
     taxAmount = taxAmount.add(lineTax).toDecimalPlaces(2);
     const canonicalUnit = catalogItem.unitOfMeasure.symbol || catalogItem.unitOfMeasure.code || item.unit;
     prepared.push({ description: item.description, quantity: itemQuantity, unit: canonicalUnit, unitPrice, taxRate, lineSubtotal, taxAmount: lineTax, lineTotal, sourceEntityType: nullable(item.sourceEntityType), sourceEntityId: nullable(item.sourceEntityId), sortOrder: index });
-    catalogLinks.push({ catalogItemId: catalogItem.id, unitOfMeasureId: catalogItem.unitOfMeasureId, expectedItemType: catalogExpectedItemType(catalogItem.itemType, catalogItem.trackInventory), sortOrder: index });
+    catalogLinks.push({ catalogItemId: catalogItem.id, unitOfMeasureId: catalogItem.unitOfMeasureId, unitDecimalScale: catalogItem.unitOfMeasure.decimalScale, unitCodeSnapshot: catalogItem.unitOfMeasure.code, expectedItemType: catalogExpectedItemType(catalogItem.itemType, catalogItem.trackInventory), sortOrder: index });
   }
   return { items: prepared, catalogLinks, subtotalAmount, taxAmount, totalAmount: subtotalAmount.add(taxAmount).toDecimalPlaces(2) };
 }
@@ -90,7 +91,7 @@ async function syncPurchaseItemCatalogLinks(tx: ProcurementTransaction, organiza
     data: purchaseItems.map((purchaseItem) => {
       const link = linkByOrder.get(purchaseItem.sortOrder);
       if (!link) throw new EnterpriseCoreV2Error("Une ligne d’achat ne possède pas de référence catalogue.", 409, "PURCHASE_ITEM_CATALOG_LINK_MISSING");
-      return { organizationId, purchaseItemId: purchaseItem.id, catalogItemId: link.catalogItemId, unitOfMeasureId: link.unitOfMeasureId, expectedItemType: link.expectedItemType };
+      return { organizationId, purchaseItemId: purchaseItem.id, catalogItemId: link.catalogItemId, unitOfMeasureId: link.unitOfMeasureId, unitDecimalScale: link.unitDecimalScale, unitCodeSnapshot: link.unitCodeSnapshot, expectedItemType: link.expectedItemType };
     }),
   });
 }
@@ -304,7 +305,13 @@ export async function receiveEnterprisePurchase(organizationId: string, purchase
     for (const inputItem of input.items) if (!itemMap.has(inputItem.purchaseItemId)) throw new EnterpriseCoreV2Error("Une ligne de réception n’appartient pas à cet achat.", 400, "CROSS_TENANT_RECEIPT_ITEM");
     const prior = await tx.enterprisePurchaseReceiptItem.groupBy({ by: ["purchaseItemId"], where: { organizationId, purchaseItemId: { in: purchase.items.map((item) => item.id) } }, _sum: { quantityReceived: true } });
     const receivedMap = new Map(prior.map((entry) => [entry.purchaseItemId, quantity(entry._sum.quantityReceived || 0)]));
-    for (const inputItem of input.items) { const ordered = quantity(itemMap.get(inputItem.purchaseItemId)!.quantity); const previous = receivedMap.get(inputItem.purchaseItemId) || quantity(0); const next = previous.add(quantity(inputItem.quantityReceived)); if (next.gt(ordered)) throw new EnterpriseCoreV2Error("La quantité reçue ne peut pas dépasser la quantité restant à recevoir.", 409, "PURCHASE_OVER_RECEIPT"); receivedMap.set(inputItem.purchaseItemId, next); }
+    for (const inputItem of input.items) {
+      const ordered = quantity(itemMap.get(inputItem.purchaseItemId)!.quantity);
+      const previous = exactInventoryQuantity(receivedMap.get(inputItem.purchaseItemId) ?? 0);
+      const next = previous.add(quantity(inputItem.quantityReceived));
+      if (next.gt(ordered)) throw new EnterpriseCoreV2Error("La quantité reçue ne peut pas dépasser la quantité restant à recevoir.", 409, "PURCHASE_OVER_RECEIPT");
+      receivedMap.set(inputItem.purchaseItemId, next);
+    }
     const fullyReceived = purchase.items.every((item) => (receivedMap.get(item.id) || quantity(0)).gte(quantity(item.quantity)));
     const nextStatus = fullyReceived ? "RECEIVED" : "PARTIALLY_RECEIVED";
     const locked = await tx.enterprisePurchase.updateMany({ where: { id: purchaseId, organizationId, status: purchase.status, revision: input.revision, archivedAt: null }, data: { status: nextStatus, ...(fullyReceived ? { receivedAt: input.receivedAt } : {}), updatedByUserId: actorUserId, revision: { increment: 1 } } });

@@ -27,9 +27,39 @@ type AccountingQueryDb = Pick<
   | "enterpriseFiscalPeriod"
   | "enterpriseJournalEntry"
   | "enterpriseJournalLine"
+  | "enterpriseInventoryItem"
   | "enterpriseLedgerAccount"
   | "enterprisePostingBatch"
+  | "$queryRaw"
 >;
+
+// Only replace exactly recognized machine-generated legacy stock narratives.
+const legacyInventoryNarrativeKinds = ["ISSUE", "RECEIPT", "LOSS", "SUPPLIER_RETURN", "CUSTODY_RECOVERY"];
+type InventoryNarrativeLine = { inventoryItemId: string | null; description: string | null };
+async function enrichInventoryNarratives<T extends InventoryNarrativeLine>(
+  db: AccountingQueryDb, organizationId: string, rows: T[],
+): Promise<Array<T & { displayDescription: string | null }>> {
+  const legacyKind = (row: T) => {
+    if (!row.inventoryItemId || !row.description) return null;
+    return legacyInventoryNarrativeKinds.find(
+      (kind) => row.description === `${kind} ${row.inventoryItemId}`,
+    ) || null;
+  };
+  const ids = [...new Set(rows.filter(row => legacyKind(row)).map(row => row.inventoryItemId!))];
+  const items = ids.length ? await db.enterpriseInventoryItem.findMany({
+    where: { organizationId, id: { in: ids } },
+    select: { id: true, catalogItem: { select: { name: true, code: true } } },
+  }) : [];
+  const byId = new Map(items.map(item => [item.id, item.catalogItem]));
+  return rows.map(row => {
+    const kind = legacyKind(row);
+    if (!kind) return { ...row, displayDescription: row.description };
+    const item = byId.get(row.inventoryItemId!);
+    return { ...row, displayDescription: item
+      ? `${kind} current catalog ${[item.name, item.code].filter(Boolean).join(" · ")}`
+      : `${kind} catalog unavailable` };
+  });
+}
 
 const MAX_PAGE_SIZE = 100;
 export const LEDGER_BEARING_ENTRY_STATUSES = ["POSTED", "REVERSED"] as const;
@@ -48,29 +78,42 @@ function dateFilter(filters: AccountingQueryFilters): Prisma.DateTimeFilter | un
   };
 }
 
-function postedEntryWhere(filters: AccountingQueryFilters): Prisma.EnterpriseJournalEntryWhereInput {
-  return {
-    status: { in: [...LEDGER_BEARING_ENTRY_STATUSES] },
-    ...(dateFilter(filters) ? { accountingDate: dateFilter(filters) } : {}),
-    ...(filters.fiscalPeriodId ? { fiscalPeriodId: filters.fiscalPeriodId } : {}),
-    ...(filters.journalId ? { journalId: filters.journalId } : {}),
-    ...(filters.sourceModule ? { sourceModule: filters.sourceModule } : {}),
-    ...(filters.sourceEntityType ? { sourceEntityType: filters.sourceEntityType } : {}),
-    ...(filters.currencyCode ? { functionalCurrencyCode: filters.currencyCode } : {}),
-  };
-}
+const dimensions = ["ledgerAccountId", "businessPartyId", "projectId", "departmentId", "siteId", "assetId", "inventoryItemId"] as const;
 
 function dimensionLineWhere(filters: AccountingQueryFilters): Prisma.EnterpriseJournalLineWhereInput {
-  return {
-    ...(filters.ledgerAccountId ? { ledgerAccountId: filters.ledgerAccountId } : {}),
-    ...(filters.businessPartyId ? { businessPartyId: filters.businessPartyId } : {}),
-    ...(filters.projectId ? { projectId: filters.projectId } : {}),
-    ...(filters.departmentId ? { departmentId: filters.departmentId } : {}),
-    ...(filters.siteId ? { siteId: filters.siteId } : {}),
-    ...(filters.assetId ? { assetId: filters.assetId } : {}),
-    ...(filters.inventoryItemId ? { inventoryItemId: filters.inventoryItemId } : {}),
-  };
+  return Object.fromEntries(dimensions.flatMap(dimension => filters[dimension] ? [[dimension, filters[dimension]]] : []));
 }
+
+function ledgerSearch(search: string) {
+  if (!search) return Prisma.empty;
+  const contains = `%${search.replace(/[\\%_]/g, character => "\\" + character)}%`;
+  const narratives = legacyInventoryNarrativeKinds.map(kind => Prisma.sql`${kind + " "} || line."inventoryItemId"`);
+  return Prisma.sql`AND (
+    line.description ILIKE ${contains}
+    OR entry.number ILIKE ${contains}
+    OR entry.reference ILIKE ${contains}
+    OR entry.description ILIKE ${contains}
+    OR EXISTS (
+      SELECT 1 FROM "EnterpriseLedgerAccount" account
+      WHERE account."organizationId" = line."organizationId" AND account.id = line."ledgerAccountId"
+        AND (account.code ILIKE ${contains} OR account."nameFr" ILIKE ${contains} OR account."nameEn" ILIKE ${contains})
+    )
+    OR EXISTS (
+      SELECT 1 FROM "EnterpriseInventoryItem" item
+      JOIN "EnterpriseCatalogItem" catalog
+        ON catalog."organizationId" = item."organizationId" AND catalog.id = item."catalogItemId"
+      WHERE item."organizationId" = line."organizationId" AND item.id = line."inventoryItemId"
+        AND line.description IN (${Prisma.join(narratives)})
+        AND (catalog.name ILIKE ${contains} OR catalog.code ILIKE ${contains})
+    )
+  )`;
+}
+
+type LedgerSelection = {
+  ids: string[];
+  total: bigint;
+  totals: { currencyCode: string; debit: string; credit: string }[];
+};
 
 export async function getAccountingGeneralLedger(
   db: AccountingQueryDb,
@@ -78,79 +121,91 @@ export async function getAccountingGeneralLedger(
   filters: AccountingQueryFilters = {},
 ) {
   const { page, pageSize, skip } = pageValues(filters);
-  const search = filters.search?.trim() || "";
-  const where: Prisma.EnterpriseJournalLineWhereInput = {
-    organizationId,
-    ...dimensionLineWhere(filters),
-    journalEntry: { organizationId, ...postedEntryWhere(filters) },
-    ...(search
-      ? {
-          OR: [
-            { description: { contains: search, mode: "insensitive" } },
-            { ledgerAccount: { code: { contains: search, mode: "insensitive" } } },
-            { ledgerAccount: { nameFr: { contains: search, mode: "insensitive" } } },
-            { ledgerAccount: { nameEn: { contains: search, mode: "insensitive" } } },
-            { journalEntry: { number: { contains: search, mode: "insensitive" } } },
-            { journalEntry: { reference: { contains: search, mode: "insensitive" } } },
-            { journalEntry: { description: { contains: search, mode: "insensitive" } } },
-          ],
-        }
-      : {}),
-  };
-
-  const [rows, total] = await Promise.all([
-    db.enterpriseJournalLine.findMany({
-      where,
-      orderBy: [
-        { journalEntry: { accountingDate: "desc" } },
-        { journalEntry: { number: "desc" } },
-        { createdAt: "asc" },
-      ],
-      skip,
-      take: pageSize,
-      select: {
-        id: true,
-        ledgerAccountId: true,
-        businessPartyId: true,
-        projectId: true,
-        departmentId: true,
-        siteId: true,
-        assetId: true,
-        inventoryItemId: true,
-        description: true,
-        debit: true,
-        credit: true,
-        transactionCurrencyCode: true,
-        transactionAmount: true,
-        exchangeRate: true,
-        functionalAmount: true,
-        analyticReference: true,
-        ledgerAccount: { select: { code: true, nameFr: true, nameEn: true, accountType: true } },
-        journalEntry: {
-          select: {
-            id: true,
-            number: true,
-            accountingDate: true,
-            documentDate: true,
-            reference: true,
-            description: true,
-            sourceModule: true,
-            sourceEntityType: true,
-            sourceEntityId: true,
-            postingEvent: true,
-            functionalCurrencyCode: true,
-            status: true,
-            journal: { select: { code: true, nameFr: true, nameEn: true, journalType: true } },
-            fiscalPeriod: { select: { id: true, code: true } },
-          },
+  const dimensionFilters = dimensions.map(column => {
+    const value = filters[column];
+    // Identifiers come exclusively from the constant column list above.
+    return value ? Prisma.sql`AND ${Prisma.raw(`line."${column}"`)} = ${value}` : Prisma.empty;
+  });
+  const [selection] = await db.$queryRaw<LedgerSelection[]>`
+    WITH matched AS MATERIALIZED (
+      SELECT line.id, line."createdAt", line.debit, line.credit, entry."accountingDate",
+             entry.number, entry."functionalCurrencyCode" AS currency
+      FROM "EnterpriseJournalLine" line
+      JOIN "EnterpriseJournalEntry" entry
+        ON entry."organizationId" = line."organizationId" AND entry.id = line."journalEntryId"
+      WHERE line."organizationId" = ${organizationId}
+        AND entry.status IN (${Prisma.join([...LEDGER_BEARING_ENTRY_STATUSES])})
+        ${filters.status ? Prisma.sql`AND entry.status = ${filters.status}` : Prisma.empty}
+        ${filters.dateFrom ? Prisma.sql`AND entry."accountingDate" >= ${filters.dateFrom}` : Prisma.empty}
+        ${filters.dateTo ? Prisma.sql`AND entry."accountingDate" <= ${filters.dateTo}` : Prisma.empty}
+        ${filters.fiscalPeriodId ? Prisma.sql`AND entry."fiscalPeriodId" = ${filters.fiscalPeriodId}` : Prisma.empty}
+        ${filters.journalId ? Prisma.sql`AND entry."journalId" = ${filters.journalId}` : Prisma.empty}
+        ${filters.sourceModule ? Prisma.sql`AND entry."sourceModule" = ${filters.sourceModule}` : Prisma.empty}
+        ${filters.sourceEntityType ? Prisma.sql`AND entry."sourceEntityType" = ${filters.sourceEntityType}` : Prisma.empty}
+        ${filters.currencyCode ? Prisma.sql`AND entry."functionalCurrencyCode" = ${filters.currencyCode}` : Prisma.empty}
+        ${Prisma.join(dimensionFilters, " ")}
+        ${ledgerSearch(filters.search?.trim() || "")}
+    )
+    SELECT
+      (SELECT count(*) FROM matched) AS total,
+      ARRAY(SELECT id FROM matched ORDER BY "accountingDate" DESC, number DESC, "createdAt", id
+            LIMIT ${pageSize} OFFSET ${skip}) AS ids,
+      COALESCE((SELECT jsonb_agg(jsonb_build_object('currencyCode', currency, 'debit', debit, 'credit', credit)
+                               ORDER BY currency)
+        FROM (SELECT currency, sum(debit)::text AS debit, sum(credit)::text AS credit FROM matched GROUP BY currency) totals),
+        '[]'::jsonb) AS totals`;
+  const total = Number(selection.total);
+  const rows = selection.ids.length ? await db.enterpriseJournalLine.findMany({
+    where: { organizationId, id: { in: selection.ids } },
+    select: {
+      id: true,
+      ledgerAccountId: true,
+      businessPartyId: true,
+      projectId: true,
+      departmentId: true,
+      siteId: true,
+      assetId: true,
+      inventoryItemId: true,
+      description: true,
+      debit: true,
+      credit: true,
+      transactionCurrencyCode: true,
+      transactionAmount: true,
+      exchangeRate: true,
+      functionalAmount: true,
+      analyticReference: true,
+      ledgerAccount: { select: { code: true, nameFr: true, nameEn: true, accountType: true } },
+      journalEntry: {
+        select: {
+          id: true,
+          number: true,
+          accountingDate: true,
+          documentDate: true,
+          reference: true,
+          description: true,
+          sourceModule: true,
+          sourceEntityType: true,
+          sourceEntityId: true,
+          postingEvent: true,
+          functionalCurrencyCode: true,
+          status: true,
+          journal: { select: { code: true, nameFr: true, nameEn: true, journalType: true } },
+          fiscalPeriod: { select: { id: true, code: true } },
         },
       },
-    }),
-    db.enterpriseJournalLine.count({ where }),
-  ]);
+    },
+  }) : [];
+  const descriptionsById = new Map((await enrichInventoryNarratives(db, organizationId, rows)).map(row => [row.id, row]));
 
   return {
-    items: rows,
+    filteredTotals: selection.totals.flatMap(({ currencyCode, debit, credit }) => [
+      { currencyCode, metric: "debit", amount: new Prisma.Decimal(debit).toFixed() },
+      { currencyCode, metric: "credit", amount: new Prisma.Decimal(credit).toFixed() },
+    ]),
+    items: selection.ids.flatMap(id => {
+      const row = descriptionsById.get(id);
+      return row ? [row] : [];
+    }),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
   };
 }
@@ -294,7 +349,7 @@ export async function getAccountingEntryTrace(
   organizationId: string,
   entryId: string,
 ) {
-  return db.enterpriseJournalEntry.findFirst({
+  const entry = await db.enterpriseJournalEntry.findFirst({
     where: { organizationId, id: entryId },
     select: {
       id: true,
@@ -345,6 +400,8 @@ export async function getAccountingEntryTrace(
       },
     },
   });
+  if (!entry) return null;
+  return { ...entry, lines: await enrichInventoryNarratives(db, organizationId, entry.lines) };
 }
 
 export async function getAccountingAnomalies(

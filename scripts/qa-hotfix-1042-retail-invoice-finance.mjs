@@ -2,10 +2,12 @@ import assert from "node:assert/strict";
 import fs from "node:fs";
 import vm from "node:vm";
 import { createRequire } from "node:module";
+import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 
 const require = createRequire(import.meta.url);
 const ts = require("typescript");
 const { Prisma } = require("@prisma/client");
+const load = workflowTestLoader({});
 class EnterpriseRetailError extends Error {
   constructor(code, status = 409) { super(code); this.code = code; this.status = status; }
 }
@@ -25,7 +27,7 @@ const tx = {
   },
   enterpriseRetailConfiguration: { findUnique: async () => ({ settingsJson: state.settings }) },
   enterpriseWarehouse: { findFirst: async () => ({ id: "warehouse" }) },
-  enterpriseCatalogItem: { findMany: async () => [{ id: "product", name: "Produit", currency: "CDF", trackInventory: true }] },
+  enterpriseCatalogItem: { findMany: async () => [{ id: "product", name: "Produit", currency: "CDF", trackInventory: true, unitOfMeasure: { decimalScale: 0 } }] },
   enterpriseInventoryItem: { findMany: async () => [{ id: "inventory", catalogItemId: "product" }] },
   enterpriseInventoryBalance: { findMany: async () => [{ id: "balance", inventoryItemId: "inventory", storageLocationId: null, stockLotId: null, quantityOnHand: decimal(4), quantityReserved: decimal(0) }] },
   enterpriseInventoryReservation: { findMany: async () => [] },
@@ -55,6 +57,7 @@ const unit = { exports: {} };
 vm.runInNewContext(compiled, {
   module: unit, exports: unit.exports, Promise, Set, Map, Date,
   require: (id) => {
+    if (id === "@/lib/enterprise/inventory/quantity-policy" || id === "@/lib/enterprise/retail/schemas") return load(id);
     if (id === "@/lib/prisma") return { prisma };
     if (id === "@/lib/enterprise/retail/errors") return { EnterpriseRetailError };
     if (id === "@/lib/enterprise/retail/constants") return { RETAIL_SECTOR_CODE: "COMMERCE_RETAIL" };
@@ -130,7 +133,7 @@ assert.equal(state.movements.length, 2, "One committed stock exit after full set
 assert.equal(state.movements[1].movementType, "SALE_FULFILLMENT");
 assert.equal(state.movements[1].sourceEntityType, "EnterpriseSalesInvoice");
 assert.equal(state.movements[1].sourceEntityId, "finance-invoice");
-assert.equal(state.movements[1].quantity, 2);
+assert.equal(state.movements[1].quantity, "2");
 assert.deepEqual(state.valuations, [{ org: "tenant", actor: "cashier", movementId: "issued-2", invoiceId: "finance-invoice", currencyCode: "CDF" }], "The original issue has a matching Finance valuation");
 assert.equal(state.updated, true);
 checkout.stockPostedAt = new Date();

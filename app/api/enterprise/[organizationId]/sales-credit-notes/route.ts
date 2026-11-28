@@ -6,6 +6,7 @@ import { authorizeFinanceRequest, financeBusinessDateRange, financeErrorResponse
 import { createSalesCreditNote } from "@/lib/enterprise/accounting/receivables-service";
 import { creditNoteCreateSchema } from "@/lib/enterprise/accounting/schemas";
 import { prisma } from "@/lib/prisma";
+import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -18,9 +19,11 @@ export async function GET(req: Request, { params }: Params) {
   if (!dates.ok) return dates.response;
 
   const { page, pageSize, search, status } = financeListParams(req);
+  const retailScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "VIEW_SALES");
   const recordId = new URL(req.url).searchParams.get("recordId")?.trim() || undefined;
   const where: Prisma.EnterpriseSalesCreditNoteWhereInput = {
     organizationId,
+    ...(retailScope !== null ? { AND: [{ salesInvoice: { OR: [{ retailCheckout: { is: null } }, { retailCheckout: { is: { siteId: { in: retailScope } } } }] } }] } : {}),
     ...((dates.from || dates.to) ? { creditDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
     ...(recordId ? { id: recordId } : {}),
     ...(status ? { status } : {}),
@@ -30,16 +33,20 @@ export async function GET(req: Request, { params }: Params) {
       { salesInvoice: { number: { contains: search, mode: "insensitive" } } },
     ] } : {}),
   };
-  const [items, total] = await Promise.all([
-    prisma.enterpriseSalesCreditNote.findMany({
+  const [items, total, filtered] = await prisma.$transaction(async tx => {
+    const result = await Promise.all([
+    tx.enterpriseSalesCreditNote.findMany({
       where,
       orderBy: [{ creditDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { salesInvoice: true, items: true },
     }),
-    prisma.enterpriseSalesCreditNote.count({ where }),
-  ]);
+    tx.enterpriseSalesCreditNote.count({ where }),
+    tx.enterpriseSalesCreditNote.groupBy({ by: ["currencyCode", "status"], where, _sum: { grandTotal: true, taxTotal: true } }),
+    ]);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   const approvals = items.length ? await prisma.enterpriseApproval.findMany({
     where: {
@@ -89,7 +96,10 @@ export async function GET(req: Request, { params }: Params) {
   }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "sales-credit-notes", page, recordId: Boolean(recordId) } });
-  return NextResponse.json({ items: resultItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json({ items: resultItems, filteredTotals: filtered.flatMap(row => [
+      { currencyCode: row.currencyCode, status: row.status, metric: "creditTotal", amount: row._sum.grandTotal?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "tax", amount: row._sum.taxTotal?.toFixed() ?? "0" },
+    ]), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {

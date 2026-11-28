@@ -41,16 +41,20 @@ export async function GET(req: Request, { params }: Params) {
     ] } : {}),
   };
 
-  const [items, total] = await Promise.all([
-    prisma.enterpriseSalesInvoice.findMany({
+  const [items, total, filtered] = await prisma.$transaction(async tx => {
+    const result = await Promise.all([
+    tx.enterpriseSalesInvoice.findMany({
       where,
       orderBy: [{ invoiceDate: "desc" }, { createdAt: "desc" }],
       skip: (page - 1) * pageSize,
       take: pageSize,
       include: { items: true, receivable: true, retailCheckout: { select: { siteId: true } } },
     }),
-    prisma.enterpriseSalesInvoice.count({ where }),
-  ]);
+    tx.enterpriseSalesInvoice.count({ where }),
+    tx.enterpriseSalesInvoice.groupBy({ by: ["currencyCode", "status"], where, _sum: { grandTotal: true, taxTotal: true, amountPaid: true, amountCredited: true, outstandingAmount: true } }),
+    ]);
+    return result;
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   const assignedApprovals = items.length ? await prisma.enterpriseApproval.findMany({
     where: {
       organizationId,
@@ -82,7 +86,13 @@ export async function GET(req: Request, { params }: Params) {
   }));
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "sales-invoices", page, recordId: Boolean(recordId), workflowPending } });
-  return NextResponse.json({ items: resultItems, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json({ items: resultItems, filteredTotals: filtered.flatMap(row => [
+      { currencyCode: row.currencyCode, status: row.status, metric: "invoiceTotal", amount: row._sum.grandTotal?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "tax", amount: row._sum.taxTotal?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "paid", amount: row._sum.amountPaid?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "credited", amount: row._sum.amountCredited?.toFixed() ?? "0" },
+      { currencyCode: row.currencyCode, status: row.status, metric: "outstanding", amount: row._sum.outstandingAmount?.toFixed() ?? "0" },
+    ]), pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
 }
 
 export async function POST(req: Request, { params }: Params) {

@@ -134,7 +134,7 @@ export async function assertRetailLotPolicyTx(
       const demand = new Map<string, Prisma.Decimal>();
       for (const line of selected) {
         const amount = new Prisma.Decimal(line.quantity ?? 1);
-        if (!amount.isFinite() || amount.lte(0) || amount.decimalPlaces() > 3) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
+        if (!amount.isFinite() || amount.lte(0) || amount.decimalPlaces() > 6) throw new EnterpriseRetailError("RETAIL_STOCK_LOT_INVALID", 409);
         demand.set(line.stockLotId!, (demand.get(line.stockLotId!) || zero()).plus(amount));
       }
       const quantity = [...demand.values()].reduce((sum, value) => sum.plus(value), zero());

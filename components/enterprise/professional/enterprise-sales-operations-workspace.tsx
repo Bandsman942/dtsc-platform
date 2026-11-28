@@ -1,12 +1,15 @@
 "use client";
 
+import { inventoryQuantityStep, isInventoryQuantityInputValid } from "@/lib/enterprise/inventory/quantity-display";
+import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
+
 import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { BadgeCheck, Boxes, CheckCircle2, Eye, FilePenLine, FileText, PackageCheck, Plus, Printer, RefreshCcw, Send, ShoppingCart, Truck, XCircle } from "lucide-react";
 import Link from "next/link";
 import { currencyChoices, Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { OrderBatchReservationsDialog, orderBatchCopy } from "@/components/enterprise/professional/order-batch-reservations-dialog";
 import { commercialHotfixCopy } from "@/components/enterprise/professional/commercial-hotfix-copy";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import {
   ProfessionalError,
   ProfessionalFormSection,
@@ -94,6 +97,7 @@ type CatalogItem = {
   code: string;
   name: string;
   itemType: string;
+  unitOfMeasure: { id: string; name: string; symbol: string | null; decimalScale: number };
   indicativeSalePrice: string | number | null;
   currency: string | null;
 };
@@ -201,8 +205,8 @@ export function EnterpriseSalesOperationsWorkspace({
     if (dateTo) value.set("dateTo", dateTo);
     return value;
   }, [page, search, status, dateFrom, dateTo]);
-  const quotes = useProfessionalCollection<Quote>({ endpoint: `/api/enterprise/${organizationId}/quotes`, params, refreshKey });
-  const orders = useProfessionalCollection<SalesOrder>({ endpoint: `/api/enterprise/${organizationId}/sales-orders`, params, refreshKey });
+  const quotes = useProfessionalCollection<Quote, MonetaryScopes>({ endpoint: `/api/enterprise/${organizationId}/quotes`, params, refreshKey });
+  const orders = useProfessionalCollection<SalesOrder, MonetaryScopes>({ endpoint: `/api/enterprise/${organizationId}/sales-orders`, params, refreshKey });
   const activeCollection = tab === "QUOTES" ? quotes : orders;
   const activeFilters = { search, status, dateFrom, dateTo };
   const exportColumns: FinanceExportColumn[] = [
@@ -242,6 +246,10 @@ export function EnterpriseSalesOperationsWorkspace({
     setCreateOpen(true);
   }
 
+  function lineQuantityScale(line: QuoteLine) {
+    return line.catalogItemId ? catalogItems.find(item => item.id === line.catalogItemId)?.unitOfMeasure?.decimalScale : 6;
+  }
+
   function updateLine(lineId: string, key: keyof QuoteLine, value: string) {
     setMessage("");
     setLines((current) => current.map((line) => {
@@ -267,6 +275,7 @@ export function EnterpriseSalesOperationsWorkspace({
         return hotfix.quoteLineRequired;
       }
       const item = line.catalogItemId ? catalogItems.find((candidate) => candidate.id === line.catalogItemId) : null;
+      if (!isInventoryQuantityInputValid(line.quantity, lineQuantityScale(line))) return hotfix.quoteQuantityUnit;
       if (item?.currency && item.currency !== quoteCurrency) return hotfix.quoteCurrencyMismatch;
     }
     return "";
@@ -293,6 +302,7 @@ export function EnterpriseSalesOperationsWorkspace({
         terms: String(form.get("terms") || "") || null,
         items: lines.map((line) => ({
           catalogItemId: line.catalogItemId || null,
+          unitOfMeasureId: line.catalogItemId ? catalogItems.find(item => item.id === line.catalogItemId)?.unitOfMeasure?.id : null,
           description: line.description,
           quantity: Number(line.quantity),
           unitPrice: Number(line.unitPrice),
@@ -434,11 +444,11 @@ export function EnterpriseSalesOperationsWorkspace({
         primaryAction={quotes.canWrite ? <Button onClick={openCreate} className="bg-dtsc-blue text-white"><Plus className="h-4 w-4" />{t("sales.newQuote")}</Button> : undefined}
       />
       <ModuleMetrics label={t("sales.metrics")} className="lg:[&>div]:grid-cols-5">
-        <ModuleMetric icon={<FilePenLine className="h-4 w-4 text-slate-500" />} className="border-l-slate-400" label={t("sales.metricDraftQuotes")} value={quotes.metrics.draft || 0} />
-        <ModuleMetric icon={<Send className="h-4 w-4 text-sky-500" />} className="border-l-sky-500" label={t("sales.metricSentQuotes")} value={quotes.metrics.sent || 0} />
-        <ModuleMetric icon={<BadgeCheck className="h-4 w-4 text-emerald-500" />} className="border-l-emerald-500" label={t("sales.metricAcceptedQuotes")} value={quotes.metrics.accepted || 0} />
-        <ModuleMetric icon={<Boxes className="h-4 w-4 text-indigo-500" />} className="border-l-indigo-500" label={t("sales.metricConfirmedOrders")} value={orders.metrics.confirmed || 0} />
-        <ModuleMetric icon={<Truck className="h-4 w-4 text-amber-500" />} className="border-l-amber-500" label={t("sales.metricPartial")} value={orders.metrics.partial || 0} />
+        <ModuleMetric icon={<FilePenLine className="h-4 w-4 text-slate-500" />} className="border-l-slate-400" label={t("sales.metricDraftQuotes")} value={quotes.loading || quotes.error ? "—" : quotes.metrics.draft ?? 0} />
+        <ModuleMetric icon={<Send className="h-4 w-4 text-sky-500" />} className="border-l-sky-500" label={t("sales.metricSentQuotes")} value={quotes.loading || quotes.error ? "—" : quotes.metrics.sent ?? 0} />
+        <ModuleMetric icon={<BadgeCheck className="h-4 w-4 text-emerald-500" />} className="border-l-emerald-500" label={t("sales.metricAcceptedQuotes")} value={quotes.loading || quotes.error ? "—" : quotes.metrics.accepted ?? 0} />
+        <ModuleMetric icon={<Boxes className="h-4 w-4 text-indigo-500" />} className="border-l-indigo-500" label={t("sales.metricConfirmedOrders")} value={orders.loading || orders.error ? "—" : orders.metrics.confirmed ?? 0} />
+        <ModuleMetric icon={<Truck className="h-4 w-4 text-amber-500" />} className="border-l-amber-500" label={t("sales.metricPartial")} value={orders.loading || orders.error ? "—" : orders.metrics.partial ?? 0} />
       </ModuleMetrics>
       <ModuleToolbar
         search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={t("sales.search")} />}
@@ -459,6 +469,7 @@ export function EnterpriseSalesOperationsWorkspace({
         summary={t("sales.toolbarSummary")}
       />
       <ModuleContent density="compact">
+        {!activeCollection.loading && !activeCollection.error ? <FinanceAmountScopes totals={activeCollection.extra} locale={locale} /> : null}
         <nav aria-label={t("sales.connectedModules")} className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-xl border border-cyan-500/20 bg-cyan-500/5 px-3 py-2 text-xs">
           <span className="font-black text-dtsc-ink">{t("sales.connectedModules")}</span>
           {([["CRM_CUSTOMERS", "sales.linkCustomers"], ["CATALOG", "sales.linkCatalog"], ["INVENTORY_LOGISTICS", "sales.linkInventory"], ["FINANCE_RECEIVABLES", "sales.linkFinance"]] as const).map(([code, label]) => <Link key={code} href={`/enterprise-modules/${code}`} className="rounded-lg border border-dtsc-border bg-dtsc-surface px-2.5 py-1.5 font-semibold text-dtsc-blue transition hover:border-cyan-500/50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400">{t(label)}</Link>)}
@@ -502,7 +513,7 @@ export function EnterpriseSalesOperationsWorkspace({
           <ProfessionalFormSection title={t("sales.productsServices")} description={t("sales.productsServicesHelp")}>
             <div className="md:col-span-2 grid gap-3">
               <Field label={t("sales.productsServices")} help={hotfix.catalogSearchHelp}><ProfessionalSearch value={catalogSearch} onChange={setCatalogSearch} placeholder={hotfix.catalogSearch} /></Field>
-              {lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-6"><div className="md:col-span-2"><Field label={t("sales.item", { index: index + 1 })}><NativeSelect value={line.catalogItemId} onChange={(value) => updateLine(line.id, "catalogItemId", value)} items={[{ id: "", label: t("sales.freeDescription") }, ...catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}${item.currency ? ` · ${item.currency}` : ""}` }))]} /></Field></div><div className="md:col-span-2"><Field label={t("sales.description")} required><Input value={line.description} onChange={(event) => updateLine(line.id, "description", event.target.value)} required /></Field></div><Field label={t("sales.quantity")} required><Input type="number" min="0.01" step="0.01" value={line.quantity} onChange={(event) => updateLine(line.id, "quantity", event.target.value)} required /></Field><Field label={t("sales.unitPrice")} required><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)} required /></Field><Field label={t("sales.discount")}><Input type="number" min="0" max="100" step="0.01" value={line.discountRate} onChange={(event) => updateLine(line.id, "discountRate", event.target.value)} /></Field><Field label={t("sales.tax")}><Input type="number" min="0" max="100" step="0.01" value={line.taxRate} onChange={(event) => updateLine(line.id, "taxRate", event.target.value)} /></Field>{lines.length > 1 ? <div className="md:col-span-2 flex items-end"><Button type="button" variant="outline" onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}>{t("sales.removeLine")}</Button></div> : null}</div>)}
+              {lines.map((line, index) => <div key={line.id} className="grid gap-3 rounded-2xl border border-dtsc-border p-3 md:grid-cols-6"><div className="md:col-span-2"><Field label={t("sales.item", { index: index + 1 })}><NativeSelect value={line.catalogItemId} onChange={(value) => updateLine(line.id, "catalogItemId", value)} items={[{ id: "", label: t("sales.freeDescription") }, ...catalogItems.map((item) => ({ id: item.id, label: `${item.code} · ${item.name}${item.currency ? ` · ${item.currency}` : ""}` }))]} /></Field></div><div className="md:col-span-2"><Field label={t("sales.description")} required><Input value={line.description} onChange={(event) => updateLine(line.id, "description", event.target.value)} required /></Field></div><Field label={t("sales.quantity")} required><Input type="number" min={inventoryQuantityStep(lineQuantityScale(line))} step={inventoryQuantityStep(lineQuantityScale(line))} disabled={!inventoryQuantityStep(lineQuantityScale(line))} value={line.quantity} onChange={(event) => updateLine(line.id, "quantity", event.target.value)} required /></Field><Field label={t("sales.unitPrice")} required><Input type="number" min="0" step="0.01" value={line.unitPrice} onChange={(event) => updateLine(line.id, "unitPrice", event.target.value)} required /></Field><Field label={t("sales.discount")}><Input type="number" min="0" max="100" step="0.01" value={line.discountRate} onChange={(event) => updateLine(line.id, "discountRate", event.target.value)} /></Field><Field label={t("sales.tax")}><Input type="number" min="0" max="100" step="0.01" value={line.taxRate} onChange={(event) => updateLine(line.id, "taxRate", event.target.value)} /></Field>{lines.length > 1 ? <div className="md:col-span-2 flex items-end"><Button type="button" variant="outline" onClick={() => setLines((current) => current.filter((candidate) => candidate.id !== line.id))}>{t("sales.removeLine")}</Button></div> : null}</div>)}
               <Button type="button" variant="outline" onClick={() => setLines((current) => [...current, newLine(current.length)])}><Plus className="h-4 w-4" />{t("sales.addLine")}</Button>
             </div>
           </ProfessionalFormSection>

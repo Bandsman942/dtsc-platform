@@ -5,7 +5,7 @@ import { Archive, CheckCircle2, Edit3, Eye, Plus, Send, ShieldCheck, XCircle } f
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, treasuryBalanceAtKpi, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { EnterpriseFinanceFundingPanel, type FundingOperationRecord } from "@/components/enterprise/professional/enterprise-finance-funding-panel";
 import {
@@ -27,6 +27,7 @@ import { ContextActions } from "@/components/workspace/context-actions";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import type { TreasuryBalanceAt } from "@/lib/enterprise/accounting/treasury-balance-at";
 import { translateEnterpriseTreasury, type EnterpriseTreasuryCopyKey } from "@/lib/i18n/enterprise-treasury";
 
 type Props = {
@@ -149,14 +150,20 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
   const endpoint = tab === "accounts" ? "financial-accounts" : tab === "funding" ? "funding-operations" : tab === "transfers" ? "account-transfers" : "treasury-history";
   const filters = useMemo<Record<string, string | boolean | undefined>>(() => tab === "history" ? { ...historyFilters, from: dateFrom, to: dateTo } : { dateFrom, dateTo }, [dateFrom, dateTo, historyFilters, tab]);
   const collection = useOperationalFinanceCollection<FinanceRecord>({ endpoint: `/api/enterprise/${organizationId}/${endpoint}`, page, search, status, filters, refreshKey });
+  const reportedBalance = collection.metrics.treasuryBalanceAt as TreasuryBalanceAt | undefined;
+  const balance = tab === "history" && reportedBalance?.accountId === historyFilters.accountId && reportedBalance?.date === dateTo
+    ? treasuryBalanceAtKpi(reportedBalance, locale) : undefined;
   const exportColumns: FinanceExportColumn[] = [
-    { key: "reference", labelFr: "Référence / code", labelEn: "Reference / code", get: (row) => String(row.number || row.code || row.reference || row.id || "") },
-    { key: "name", labelFr: "Intitulé", labelEn: "Name", get: (row) => String(row.name || row.description || row.transactionType || "") },
+    { key: "reference", labelFr: "Référence / code", labelEn: "Reference / code", get: (row) => String(row.number || row.code || row.reference || "") },
+    { key: "name", labelFr: "Intitulé", labelEn: "Name", get: (row) => String(row.name || row.description || (row.transactionType ? financeEnumLabel(String(row.transactionType), locale) : "")) },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(String(row.status || row.reconciliationStatus || ""), locale) },
     { key: "date", labelFr: "Date", labelEn: "Date", get: (row) => financeDate(row.transactionDate || row.transferDate || row.operationDate || row.createdAt, locale) },
     { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => String(row.currencyCode || row.sourceCurrencyCode || "") },
     { key: "amount", labelFr: "Montant", labelEn: "Amount", get: (row) => String(row.amount || row.sourceAmount || row.operationalBalance || "") },
   ];
+  if (tab === "history") {
+    exportColumns.push({ key: "direction", labelFr: "Sens", labelEn: "Direction", get: (row) => financeEnumLabel(String(row.direction || ""), locale) });
+  }
 
   useEffect(() => {
     const accountId = searchParams.get("accountId");
@@ -258,7 +265,35 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
 
   return <ModuleWorkspace>
     <ModuleHeader eyebrow={`${t("eyebrow")} · ${organizationName}`} title={t("title")} description={locale === "en" ? definition.descriptionEn : definition.descriptionFr} count={`${collection.pagination.total}`} primaryAction={canCreate ? <div className="flex flex-wrap gap-2">{tab === "accounts" ? <Button onClick={() => setAccountOpen(true)}><Plus className="h-4 w-4" />{t("newAccount")}</Button> : tab === "transfers" ? <Button onClick={() => setTransferOpen(true)}><Send className="h-4 w-4" />{t("newTransfer")}</Button> : null}</div> : undefined} />
-    <ModuleToolbar search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={placeholder} />} controls={<div className="grid min-w-0 gap-2"><ProfessionalTabs value={tab} onChange={changeTab} items={tabItems} label={t("title")} />{tab !== "history" ? <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...(tab === "funding" ? ["DRAFT", "APPROVED", "CONFIRMED", "REVERSED", "REJECTED"] : ["ACTIVE", "INACTIVE", "DRAFT", "APPROVED", "CONFIRMED"]).map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} /> : <div className="grid gap-2 md:grid-cols-3"><NativeSelect value={historyFilters.transactionType} onChange={(value) => { setHistoryFilters((current) => ({ ...current, transactionType: value })); setPage(1); }} items={[{ id: "", label: t("allTypes") }, ...["PAYMENT", "TRANSFER", "FUNDING", "FUNDING_REVERSAL", "CASH", "ADJUSTMENT"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))]} /><NativeSelect value={historyFilters.direction} onChange={(value) => { setHistoryFilters((current) => ({ ...current, direction: value })); setPage(1); }} items={[{ id: "", label: t("allDirections") }, { id: "INBOUND", label: t("inbound") }, { id: "OUTBOUND", label: t("outbound") }]} /><FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="historyAccountId" label={t("account")} locale={rawLocale} onOptionChange={(option) => { setHistoryFilters((current) => ({ ...current, accountId: option?.id || "" })); setPage(1); }} /></div>}<div className="flex min-w-0 flex-wrap items-end gap-2"><FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} /><FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${endpoint}`} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${tab}`} locale={locale} filters={{ search, status, ...Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, typeof value === "boolean" ? String(value) : value || ""])) }} columns={exportColumns} disabled={collection.loading} /></div></div>} summary={tab === "history" ? t("historyDescription") : tab === "funding" ? t("fundingNonRevenueNotice") : t("immutableStructure")} />
+    <ModuleToolbar
+      search={<ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }} placeholder={placeholder} />}
+      controls={<div className="grid min-w-0 gap-2">
+        <ProfessionalTabs value={tab} onChange={changeTab} items={tabItems} label={t("title")} />
+        {tab === "history" ? <div className="grid min-w-0 gap-2 sm:grid-cols-2 lg:grid-cols-3">
+          <Field label={t("transactionType")}>
+            <NativeSelect value={historyFilters.transactionType} onChange={(value) => { setHistoryFilters((current) => ({ ...current, transactionType: value })); setPage(1); }} items={[{ id: "", label: t("allTypes") }, ...["PAYMENT", "TRANSFER", "FUNDING", "FUNDING_REVERSAL", "CASH", "ADJUSTMENT"].map((id) => ({ id, label: financeEnumLabel(id, locale) }))]} />
+          </Field>
+          <Field label={t("direction")}>
+            <NativeSelect value={historyFilters.direction} onChange={(value) => { setHistoryFilters((current) => ({ ...current, direction: value })); setPage(1); }} items={[{ id: "", label: t("allDirections") }, { id: "INBOUND", label: t("inbound") }, { id: "OUTBOUND", label: t("outbound") }]} />
+          </Field>
+          <Field label={t("status")}>
+            <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...["CONFIRMED", "REVERSED"].map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} />
+          </Field>
+          <FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="financial-account" name="historyAccountId" label={t("account")} locale={rawLocale} onOptionChange={(option) => { setHistoryFilters((current) => ({ ...current, accountId: option?.id || "" })); setPage(1); }} />
+          <FinanceReferenceSelect organizationId={organizationId} moduleCode="FINANCE_TREASURY" kind="currency" name="historyCurrencyCode" label={t("currency")} locale={rawLocale} onOptionChange={(option) => { setHistoryFilters((current) => ({ ...current, currencyCode: option?.id || "" })); setPage(1); }} />
+        </div> : <NativeSelect value={status} onChange={(value) => { setStatus(value); setPage(1); }} items={[{ id: "", label: t("allStatuses") }, ...(tab === "funding" ? ["DRAFT", "APPROVED", "CONFIRMED", "REVERSED", "REJECTED"] : ["ACTIVE", "INACTIVE", "DRAFT", "APPROVED", "CONFIRMED"]).map((id) => ({ id, label: financeStatusLabel(id, locale) }))]} />}
+        <div className="flex min-w-0 flex-wrap items-end gap-2">
+          <FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
+          <FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${endpoint}`} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${sectionTitle}`} locale={locale} filters={{ search, status, ...Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, typeof value === "boolean" ? String(value) : value || ""])) }} columns={exportColumns} disabled={collection.loading || Boolean(collection.error)} />
+        </div>
+        {balance && !collection.loading && !collection.error ? <div className="min-w-0 rounded-xl border border-dtsc-border p-3">
+          <p className="text-xs font-semibold text-dtsc-muted">{balance.label}</p>
+          <p className="break-words font-semibold text-dtsc-ink">{balance.value}</p>
+          <p className="text-xs text-dtsc-muted">{t("historyBalanceScope")}</p>
+        </div> : null}
+      </div>}
+      summary={tab === "history" ? t("historyDescription") : tab === "funding" ? t("fundingNonRevenueNotice") : t("immutableStructure")}
+    />
     <ModuleContent>
       {tab === "funding" ? <EnterpriseFinanceFundingPanel
         organizationId={organizationId}
@@ -275,6 +310,7 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
         initialRecordId={searchParams.get("fundingOperationId")}
       /> : <ModuleSection title={sectionTitle} description={tab === "history" ? t("historyDescription") : t("description")}>
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : <FinanceRecordList items={collection.items} locale={locale} emptyTitle={t("noItems")} emptyDescription={t("noItemsDescription")} onOpen={(record) => setDetail(record)} actions={tab === "accounts" ? (record) => accountActions(record as Account) : undefined} />}
+        {tab === "history" && !collection.loading && !collection.error ? <FinanceAmountScopes totals={collection} locale={locale} /> : null}
         <FinancePaginationControls pagination={collection.pagination} page={page} onPage={setPage} locale={locale} />
       </ModuleSection>}
       <ProfessionalHelp moduleCode="FINANCE_TREASURY" />

@@ -67,7 +67,7 @@ expect(hasAll(operationalFinanceRouter, [
   "EnterpriseFinanceCashBankReconciliationWorkspace",
   '["FINANCE_BANK", "FINANCE_RECONCILIATION"]',
 ]), "dispatcher Finance opérationnelle branche Caisse et Banque/Rapprochement sur leurs workspaces canoniques distincts");
-expect(hasAll(cashCollectionRoute, ["movements: { select: { direction: true, amount: true } }", "expectedCurrentAmount", "theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount"]), "la caisse ouverte expose un théorique courant calculé depuis les mouvements serveur");
+expect(hasAll(cashCollectionRoute, ["tx.enterpriseCashMovement.groupBy", 'by: ["cashSessionId", "currencyCode", "direction"]', "cashSessionBalance(item.openingAmount, item.financialAccount.currencyCode", "theoreticalClosingAmount: item.expectedClosingAmount?.toFixed() ?? balance.expectedCurrentAmount"]), "la caisse ouverte expose un théorique courant calculé depuis les mouvements serveur groupés par session, devise et sens");
 
 expect(hasAll(accountingApproval, [
   "createAccountingApprovalNotification",

@@ -11,6 +11,9 @@ import { getRateLimitKey, rateLimit } from "@/lib/rate-limit";
 import { isSameOriginRequest } from "@/lib/request-security";
 
 const ERROR_MESSAGES: Record<string, string> = {
+  INVENTORY_PHYSICAL_QUANTITY_PRECISION: "La quantité dépasse la capacité du stock ou ses six décimales maximales. Corrigez la quantité sans l’arrondir.",
+  INVENTORY_UNIT_QUANTITY_PRECISION: "La quantité ne respecte pas la précision de l’unité du catalogue. Utilisez une quantité compatible avec cette unité.",
+  INVENTORY_UNIT_CONVERSION_INVALID: "La conversion d’unité n’est pas valide. Vérifiez les unités et leur facteur de conversion.",
   CASH_HANDOVER_PENDING: "Une passation attend une décision. Acceptez-la, refusez-la ou annulez-la dans la caisse avant de clôturer.",
   CASH_OPENING_FUNDS_RESERVED: "Le fonds demandé dépasse les fonds non affectés aux autres sessions. Vérifiez la trésorerie et les sessions en cours.",
   CASH_OPENING_AMOUNT_INVALID: "Le fonds d’ouverture ne peut pas être négatif.",
@@ -70,7 +73,7 @@ const ERROR_MESSAGES: Record<string, string> = {
   RETAIL_INVOICE_RETURN_LINE_INVALID: "La ligne de retour ne correspond pas à la facture concernée.",
   RETAIL_INVOICE_RETURN_DUPLICATE_LINE: "Une même ligne de facture ne peut pas figurer deux fois dans la demande de retour.",
   RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED: "La quantité demandée dépasse la quantité encore autorisée pour retour.",
-  RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION: "La quantité d’un article en stock ne peut pas dépasser trois décimales (précision des mouvements d’inventaire). Corrigez-la avant de soumettre le retour.",
+  RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION: "La quantité d’un article en stock ne peut pas dépasser six décimales. Respectez également la précision de son unité du catalogue avant de soumettre le retour.",
   RETAIL_INVOICE_RETURN_STOCK_DISPOSITION_INVALID: "Un service non stocké ne peut pas être réintégré physiquement au stock.",
   RETAIL_INVOICE_RETURN_AMOUNT_INVALID: "Le montant calculé pour ce retour est invalide. Vérifiez les quantités de la facture.",
   RETAIL_INVOICE_RETURN_AMOUNT_BELOW_MINOR_UNIT: "La quantité retournée correspond à un montant inférieur à la plus petite unité monétaire prise en charge par Finance. Augmentez la quantité ou faites vérifier la facture.",

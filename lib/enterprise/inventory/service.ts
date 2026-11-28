@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { assertTransferUnitsStillMatch, resolveTransferUnitConversionTx } from "@/lib/enterprise/inventory/transfer-unit-conversion";
 import type { z } from "zod";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
@@ -18,6 +19,7 @@ import type {
 import { prisma } from "@/lib/prisma";
 import { prepareValuedTransferDispatchTx, completeValuedTransferDispatchTx, prepareValuedTransferReceiptTx, completeValuedTransferReceiptTx } from "@/lib/enterprise/accounting/inventory-transfer-service";
 import { lotExpiryDateKey, reservationExactBalanceRemaining, reservationLegacyRemaining, reservationLotRemaining } from "@/lib/enterprise/inventory/lot-allocation";
+import { exactInventoryQuantity, addInventoryQuantities, requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 type StockMovementInput = z.infer<typeof stockMovementCreateSchema>;
 type StockTransferCreateInput = z.infer<typeof stockTransferCreateSchema>;
@@ -92,7 +94,7 @@ async function assertInventoryCoordinates(tx: Prisma.TransactionClient, organiza
   const [inventoryItem, warehouse, storageLocation, stockLot] = await Promise.all([
     tx.enterpriseInventoryItem.findFirst({
       where: { id: input.inventoryItemId, organizationId, status: "ACTIVE", archivedAt: null },
-      include: { catalogItem: { select: { id: true, code: true, name: true, trackInventory: true } } },
+      include: { catalogItem: { select: { id: true, code: true, name: true, trackInventory: true, unitOfMeasure: { select: { decimalScale: true } } } } },
     }),
     tx.enterpriseWarehouse.findFirst({ where: { id: input.warehouseId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }),
     input.storageLocationId
@@ -117,7 +119,7 @@ export async function applyStockMovementTx(
   tx: Prisma.TransactionClient,
   organizationId: string,
   actorUserId: string,
-  input: Omit<StockMovementInput, "movementType"> & {movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF" | "SUPPLIER_RETURN_OUT" | "CUSTODY_RECOVERY_IN"},
+  input: Omit<StockMovementInput, "movementType" | "quantity"> & {quantity: Prisma.Decimal.Value; movementType: StockMovementInput["movementType"] | "LOT_WRITE_OFF" | "SUPPLIER_RETURN_OUT" | "CUSTODY_RECOVERY_IN"},
   internal?: { consumingRetailInvoiceId?: string; approvedLotWriteOffId?: string; quarantinedTransferReceiptId?: string; approvedSupplierReturnId?: string; approvedRecoveryAssessmentId?: string },
 ) {
   const recovery=input.movementType==="CUSTODY_RECOVERY_IN";
@@ -169,13 +171,14 @@ export async function applyStockMovementTx(
     if (lotExpiryDateKey(stockLot.expiryDate) < today) throw new EnterpriseDomainError("STOCK_LOT_EXPIRED", 409);
   }
   const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null } });
-  const currentQuantity = Number(balance?.quantityOnHand || 0);
-  const delta = input.direction === "IN" ? input.quantity : -input.quantity;
-  const nextQuantity = currentQuantity + delta;
-  // The restricted supplier return uses the exact stored decimal, not a floating-point subtraction.
-  const nextBalance = supplierReturn ? new Prisma.Decimal(balance?.quantityOnHand || 0).minus(input.quantity) : recovery ? new Prisma.Decimal(balance?.quantityOnHand || 0).plus(input.quantity) : nextQuantity;
-  if (supplierReturn && (!balance || new Prisma.Decimal(nextBalance).lt(0))) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN",409);
-  if (nextQuantity < -0.000001 && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
+  const movementQuantity = requireInventoryQuantity(input.quantity, inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
+  const currentQuantity = exactInventoryQuantity(balance?.quantityOnHand || 0);
+  const nextBalance = addInventoryQuantities(currentQuantity, input.direction === "IN" ? movementQuantity : movementQuantity.negated());
+  // Historical incompatible fractions are never rounded or rewritten. An
+  // outbound correction may preserve them; the physical capacity still applies.
+  if (nextBalance.abs().gte("1000000000000000")) throw new EnterpriseDomainError("INVENTORY_PHYSICAL_QUANTITY_PRECISION", 400);
+  if (supplierReturn && (!balance || nextBalance.lt(0))) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN",409);
+  if (nextBalance.lt(0) && !inventoryItem.allowNegativeStock) throw new EnterpriseDomainError("NEGATIVE_STOCK_FORBIDDEN", 409);
   if (input.direction === "OUT") {
     // An invoice is not a stock movement until fully paid, but it promises
     // this stock to its customer. Every outbound channel (manual adjustment,
@@ -186,7 +189,7 @@ export async function applyStockMovementTx(
       excludeSalesInvoiceId: internal?.consumingRetailInvoiceId,
     });
     const held = holds.filter((row) => row.stockLotId === (input.stockLotId || null) || (Boolean(input.stockLotId) && !row.stockLotId))
-      .reduce((sum, row) => sum.plus(row.quantity), new Prisma.Decimal(0));
+      .reduce((sum, row) => sum.plus(row.quantity), exactInventoryQuantity(0));
     if (held.greaterThan(0) || inventoryItem.lotTracking || input.stockLotId) {
       const balances = await tx.enterpriseInventoryBalance.findMany({
         where: {
@@ -195,27 +198,27 @@ export async function applyStockMovementTx(
         },
         select: { quantityOnHand: true, quantityReserved: true },
       });
-      const physicallyFree = balances.reduce((sum, row) => sum.plus(row.quantityOnHand.minus(row.quantityReserved)), new Prisma.Decimal(0));
+      const physicallyFree = balances.reduce((sum, row) => sum.plus(exactInventoryQuantity(row.quantityOnHand).minus(row.quantityReserved)), exactInventoryQuantity(0));
       if (held.gt(0) && physicallyFree.minus(input.quantity).lessThan(held)) {
         throw new EnterpriseDomainError("RETAIL_INVOICE_STOCK_HELD", 409);
       }
       if (inventoryItem.lotTracking || input.stockLotId) {
         const reservations = await tx.enterpriseInventoryReservation.findMany({ where: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, status: "ACTIVE", OR: [{ expiresAt: null }, { expiresAt: { gt: new Date() } }] }, select: { quantity: true, fulfilledQuantity: true, lotAllocations: true, storageLocationId: true } });
-        const lotPromised = reservations.reduce((sum, row) => sum.plus(reservationLotRemaining(row, input.stockLotId || null)), new Prisma.Decimal(0));
-        const localPromised = reservations.reduce((sum, row) => sum.plus(balance ? reservationExactBalanceRemaining(row, balance.id) : 0).plus(!row.storageLocationId || row.storageLocationId === (input.storageLocationId || null) ? reservationLegacyRemaining(row) : 0), new Prisma.Decimal(0));
-        const localFree = new Prisma.Decimal(balance?.quantityOnHand || 0).minus(balance?.quantityReserved || 0).minus(localPromised);
+        const lotPromised = reservations.reduce((sum, row) => sum.plus(reservationLotRemaining(row, input.stockLotId || null)), exactInventoryQuantity(0));
+        const localPromised = reservations.reduce((sum, row) => sum.plus(balance ? reservationExactBalanceRemaining(row, balance.id) : 0).plus(!row.storageLocationId || row.storageLocationId === (input.storageLocationId || null) ? reservationLegacyRemaining(row) : 0), exactInventoryQuantity(0));
+        const localFree = exactInventoryQuantity(balance?.quantityOnHand || 0).minus(balance?.quantityReserved || 0).minus(localPromised);
         if (localFree.lt(input.quantity) || physicallyFree.minus(input.quantity).lt(held.plus(lotPromised))) throw new EnterpriseDomainError("INVENTORY_RESERVATION_STOCK_HELD", 409);
       }
     }
   }
-  const movement = await tx.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, movementType: input.movementType, direction: input.direction, quantity: input.quantity, balanceAfter: nextBalance, sourceEntityType: input.sourceEntityType || null, sourceEntityId: input.sourceEntityId || null, sourceLineId: input.sourceLineId || null, idempotencyKey: input.idempotencyKey, reason: input.reason || null, createdByUserId: actorUserId } });
+  const movement = await tx.enterpriseStockMovement.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, movementType: input.movementType, direction: input.direction, quantity: movementQuantity, balanceAfter: nextBalance, sourceEntityType: input.sourceEntityType || null, sourceEntityId: input.sourceEntityId || null, sourceLineId: input.sourceLineId || null, idempotencyKey: input.idempotencyKey, reason: input.reason || null, createdByUserId: actorUserId } });
   if (balance) {
     const updated = await tx.enterpriseInventoryBalance.updateMany({ where: { id: balance.id, organizationId, revision: balance.revision }, data: { quantityOnHand: nextBalance, revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError("INVENTORY_BALANCE_CONFLICT");
   } else {
     await tx.enterpriseInventoryBalance.create({ data: { organizationId, inventoryItemId: input.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: input.stockLotId || null, quantityOnHand: nextBalance } });
   }
-  await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseInventoryItem", entityId: input.inventoryItemId, eventType: `STOCK_${input.movementType}`, summary: `Mouvement ${input.movementType} de ${input.quantity}`, actorUserId, metadataJson: { movementId: movement.id, warehouseId: input.warehouseId, balanceAfter: nextQuantity } });
+  await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseInventoryItem", entityId: input.inventoryItemId, eventType: `STOCK_${input.movementType}`, summary: `Mouvement ${input.movementType} de ${input.quantity}`, actorUserId, metadataJson: { movementId: movement.id, warehouseId: input.warehouseId, balanceAfter: Number(nextBalance), balanceAfterExact: nextBalance.toFixed() } });
   return { movement, idempotent: false };
 }
 
@@ -238,14 +241,26 @@ export async function createEnterpriseStockTransfer(organizationId: string, acto
     if (!source || !destination) throw new EnterpriseDomainError("WAREHOUSE_NOT_FOUND", 404);
     if (!approver) throw new EnterpriseDomainError("APPROVER_NOT_MEMBER", 404);
     await requireTransferSiteAuthority(tx, organizationId, actorUserId, source.siteId);
-    for (const line of input.lines) {
-      await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId });
+    const lines = [];
+    for (const { sourceUnitId, expectedConversionVersion, ...line } of input.lines) {
+      const coordinates = await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId });
+      if (Boolean(sourceUnitId) !== Boolean(expectedConversionVersion)) throw new EnterpriseDomainError("CATALOG_CONVERSION_REVISION_CONFLICT", 409);
+      const conversion = sourceUnitId && expectedConversionVersion ? await resolveTransferUnitConversionTx(tx, {
+        organizationId,
+        catalogItemId: coordinates.inventoryItem.catalogItem.id,
+        sourceUnitId,
+        quantity: line.quantity,
+        expectedVersion: expectedConversionVersion,
+      }) : null;
+      const stockQuantity = requireInventoryQuantity(conversion?.stockQuantity ?? line.quantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
+      if (stockQuantity.gt(1_000_000_000)) throw new EnterpriseDomainError("INVENTORY_PHYSICAL_QUANTITY_PRECISION", 400);
       if (line.destinationLocationId) {
         const destinationLocation = await tx.enterpriseStorageLocation.findFirst({ where: { id: line.destinationLocationId, organizationId, warehouseId: input.destinationWarehouseId, status: "ACTIVE", archivedAt: null }, select: { id: true } });
         if (!destinationLocation) throw new EnterpriseDomainError("DESTINATION_LOCATION_NOT_FOUND", 404);
       }
+      lines.push({ ...line, quantity: stockQuantity, ...(conversion ? { unitConversionJson: conversion } : {}) });
     }
-    const transfer = await tx.enterpriseStockTransfer.create({ data: { organizationId, reference: inventoryReference("TRF"), sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: input.lines.map((line) => ({ ...line })) } }, include: { lines: true } });
+    const transfer = await tx.enterpriseStockTransfer.create({ data: { organizationId, reference: inventoryReference("TRF"), sourceWarehouseId: input.sourceWarehouseId, destinationWarehouseId: input.destinationWarehouseId, status: "PENDING_APPROVAL", requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: lines } }, include: { lines: true } });
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseStockTransfer", targetEntityId: transfer.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
     await publishEnterpriseEvent(tx, { organizationId, entityType: "EnterpriseStockTransfer", entityId: transfer.id, eventType: "STOCK_TRANSFER_SUBMITTED", summary: `Transfert ${transfer.reference} soumis`, actorUserId, toStatus: "PENDING_APPROVAL" });
     return transfer;
@@ -319,7 +334,7 @@ async function receiveTransferLinesTx(
       stockLotId: destinationLotId,
       movementType: "TRANSFER_IN",
       direction: "IN",
-      quantity: Number(line.quantity),
+      quantity: line.quantity,
       sourceEntityType: "EnterpriseStockTransfer",
       sourceEntityId: transfer.id,
       sourceLineId: line.id,
@@ -356,9 +371,10 @@ export async function decideEnterpriseStockTransfer(organizationId: string, tran
     }
     const retailConfig = await tx.enterpriseRetailConfiguration.findUnique({ where: { organizationId }, select: { settingsJson: true } });
     const confirmedReceipt = Boolean(retailConfig && readRetailInventoryPolicy(retailConfig.settingsJson).transferReception === "CONFIRMED");
+    await assertTransferUnitsStillMatch(tx, organizationId, transfer.lines);
     for (const line of transfer.lines) {
       const financialDispatch=await prepareValuedTransferDispatchTx(tx,organizationId,transfer.id,line.id);
-      const dispatchedMovement=await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: Number(line.quantity), sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
+      const dispatchedMovement=await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: transfer.sourceWarehouseId, storageLocationId: line.sourceLocationId, stockLotId: line.stockLotId, movementType: "TRANSFER_OUT", direction: "OUT", quantity: line.quantity, sourceEntityType: "EnterpriseStockTransfer", sourceEntityId: transfer.id, sourceLineId: line.id, idempotencyKey: `transfer:${transfer.id}:${line.id}:out`, reason: input.comment || null });
       if(financialDispatch) await completeValuedTransferDispatchTx(tx,organizationId,actorUserId,financialDispatch,dispatchedMovement.movement.id);
     }
     if (!confirmedReceipt) await receiveTransferLinesTx(tx, transfer, actorUserId, input.comment);
@@ -380,6 +396,7 @@ export async function receiveEnterpriseStockTransfer(organizationId: string, tra
     if (!transfer) throw new EnterpriseDomainError("STOCK_TRANSFER_NOT_IN_TRANSIT", 409);
     await requireTransferSiteAuthority(tx, organizationId, actorUserId, transfer.destinationWarehouse.siteId);
     if (transfer.revision !== revision) throw new EnterpriseDomainConflictError("STOCK_TRANSFER_REVISION_CONFLICT");
+    await assertTransferUnitsStillMatch(tx, organizationId, transfer.lines);
     await receiveTransferLinesTx(tx, transfer, actorUserId, comment);
     const updated = await tx.enterpriseStockTransfer.updateMany({
       where: { id: transferId, organizationId, status: "IN_TRANSIT", revision },
@@ -407,10 +424,11 @@ export async function createEnterpriseInventoryCount(organizationId: string, act
       const key = `${line.inventoryItemId}:${line.stockLotId || ""}`;
       if (seen.has(key)) throw new EnterpriseDomainError("INVENTORY_COUNT_LINE_DUPLICATE");
       seen.add(key);
-      await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId, stockLotId: line.stockLotId });
+      const coordinates = await assertInventoryCoordinates(tx, organizationId, { inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId, stockLotId: line.stockLotId });
+      requireInventoryQuantity(line.countedQuantity, coordinates.inventoryItem.catalogItem.unitOfMeasure.decimalScale);
       const balance = await tx.enterpriseInventoryBalance.findFirst({ where: { organizationId, inventoryItemId: line.inventoryItemId, warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, stockLotId: line.stockLotId || null } });
-      const expectedQuantity = Number(balance?.quantityOnHand || 0);
-      lines.push({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, expectedQuantity, countedQuantity: line.countedQuantity, varianceQuantity: line.countedQuantity - expectedQuantity, countedByUserId: actorUserId, countedAt: new Date(), notes: line.notes || null });
+      const expectedQuantity = exactInventoryQuantity(balance?.quantityOnHand || 0);
+      lines.push({ inventoryItemId: line.inventoryItemId, stockLotId: line.stockLotId || null, expectedQuantity, countedQuantity: line.countedQuantity, varianceQuantity: addInventoryQuantities(line.countedQuantity, expectedQuantity.negated()), countedByUserId: actorUserId, countedAt: new Date(), notes: line.notes || null });
     }
     const count = await tx.enterpriseInventoryCount.create({ data: { organizationId, reference: inventoryReference("CNT"), warehouseId: input.warehouseId, storageLocationId: input.storageLocationId || null, status: "SUBMITTED", countType: input.countType, startedAt: new Date(), submittedAt: new Date(), requestedByUserId: actorUserId, approvedByUserId: input.approverUserId, notes: input.notes || null, lines: { create: lines } }, include: { lines: true } });
     await tx.enterpriseApproval.create({ data: { organizationId, targetEntityType: "EnterpriseInventoryCount", targetEntityId: count.id, requestedByUserId: actorUserId, approverUserId: input.approverUserId } });
@@ -445,9 +463,9 @@ export async function decideEnterpriseInventoryCount(organizationId: string, cou
       const item=await tx.enterpriseInventoryItem.findFirst({where:{organizationId,id:line.inventoryItemId},select:{catalogItemId:true}});
       if(!item)throw new EnterpriseDomainError("INVENTORY_ITEM_NOT_FOUND",404);
       await assertCommonInventoryCatalogAuthorityTx(tx,organizationId,item.catalogItemId);
-      const variance = Number(line.varianceQuantity || 0);
-      if (Math.abs(variance) < 0.000001) continue;
-      await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: count.warehouseId, storageLocationId: count.storageLocationId, stockLotId: line.stockLotId, movementType: "COUNT_CORRECTION", direction: variance > 0 ? "IN" : "OUT", quantity: Math.abs(variance), sourceEntityType: "EnterpriseInventoryCount", sourceEntityId: count.id, sourceLineId: line.id, idempotencyKey: `inventory-count:${count.id}:${line.id}`, reason: input.comment || `Correction inventaire ${count.reference}` });
+      const variance = new Prisma.Decimal(line.varianceQuantity || 0);
+      if (variance.isZero()) continue;
+      await applyStockMovementTx(tx, organizationId, actorUserId, { inventoryItemId: line.inventoryItemId, warehouseId: count.warehouseId, storageLocationId: count.storageLocationId, stockLotId: line.stockLotId, movementType: "COUNT_CORRECTION", direction: variance.gt(0) ? "IN" : "OUT", quantity: variance.abs(), sourceEntityType: "EnterpriseInventoryCount", sourceEntityId: count.id, sourceLineId: line.id, idempotencyKey: `inventory-count:${count.id}:${line.id}`, reason: input.comment || `Correction inventaire ${count.reference}` });
     }
     const updated = await tx.enterpriseInventoryCount.updateMany({ where: { id: count.id, organizationId, revision: input.revision, status: "SUBMITTED" }, data: { status: "COMPLETED", approvedAt: new Date(), completedAt: new Date(), revision: { increment: 1 } } });
     if (updated.count !== 1) throw new EnterpriseDomainConflictError();

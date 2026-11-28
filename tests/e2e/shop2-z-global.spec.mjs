@@ -515,6 +515,13 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     expect(valuations.length).toBe(2);
     expect(valuations.reduce((sum, valuation) => sum + asNumber(valuation.totalCost), 0)).toBe(160);
     expect(valuations.every((valuation) => Boolean(valuation.journalEntryId))).toBe(true);
+    // #1228: the persisted narrative is a business snapshot, not an inventory ID.
+    const stockJournals = await prisma.enterpriseJournalEntry.findMany({ where: { organizationId, id: { in: valuations.map(row => row.journalEntryId) } }, include: { lines: true } });
+    expect(stockJournals).toHaveLength(2);
+    for (const journal of stockJournals) {
+      expect(journal.description).toBe(`ISSUE catalog ${product.name} · ${product.code}`);
+      expect(journal.lines.every(line => line.description === journal.description)).toBe(true);
+    }
     const replayDelivery = await apiPost(page, endpoint, firstDeliveryInput);
     expect(replayDelivery.response.ok(), JSON.stringify(replayDelivery.body)).toBeTruthy();
     expect(replayDelivery.body.fulfillment.id).toBe(firstDelivery.body.fulfillment.id);
@@ -559,10 +566,15 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     expect(low.body.pagination.total).toBe(1);
     expect(low.body.metrics.lowStockCount).toBe(1);
     expect(low.body.items[0].isLowStock).toBe(true);
+    expect(low.body.physicalTotals).toHaveLength(1);
+    expect(low.body.physicalTotals[0].unitId).toBe(product.unitOfMeasureId);
+    expect(Number(low.body.physicalTotals[0].value)).toBe(250);
+    expect(low.body.items[0].quantityOnHandExact).toBe("250");
     const beyond=await apiGet(page,`/api/enterprise/${organizationId}/inventory?search=${encodeURIComponent(key)}&warehouseId=${fixture.warehouseId}&lowStock=true&pageSize=5&page=2`);
     expect(beyond.response.status(),JSON.stringify(beyond.body)).toBe(200);
     expect(beyond.body.items).toHaveLength(0);
     expect(beyond.body.pagination.total).toBe(1);
+    expect(beyond.body.physicalTotals).toEqual(low.body.physicalTotals);
   });
 
   test("HOTFIX #1212 first tracked batch is selectable without a stock balance on real FR/EN mobile and desktop", async ({ page }) => {
@@ -570,6 +582,7 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
     await signIn(page);
     const key = "UI1212-" + crypto.randomUUID().slice(0, 12);
     const baseProduct = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const unit = await prisma.enterpriseUnitOfMeasure.findUniqueOrThrow({ where: { id: baseProduct.unitOfMeasureId } });
     const name = "E2E first tracked batch with an intentionally long catalogue description " + key;
     const product = await prisma.enterpriseCatalogItem.create({
       data: { organizationId, code: key, sku: key, name, normalizedName: name.toLowerCase(),
@@ -600,7 +613,9 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
           return url.pathname === "/api/enterprise/" + organizationId + "/inventory" && url.searchParams.get("search") === key && !url.searchParams.get("view");
         });
         await page.locator("[data-workspace-toolbar]").getByRole("textbox").fill(key);
-        expect((await registerQuery).ok()).toBeTruthy();
+        const registerResponse=await registerQuery;
+        expect(registerResponse.ok()).toBeTruthy();
+        const registerBody=await registerResponse.json();
         await expect(stockRegister.getByText(locale === "fr" ? "Aucun stock vendable" : "No sellable stock", { exact: true })).toBeVisible();
         async function downloadRegister(format) {
           const downloaded = page.waitForEvent("download");
@@ -612,11 +627,23 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         const csv = await downloadRegister("CSV");
         expect(csv.name).toMatch(/\.csv$/i);
         const rows = csv.bytes.toString("utf8").trim().split(/\r?\n/);
-        expect(rows).toHaveLength(2);
+        // #1228 analytical CSV keeps the same one data row, followed by the
+        // complete summary and filters. Verify both sections explicitly.
+        expect(rows).toHaveLength(8+registerBody.quantityTotals.length+registerBody.generalQuantityTotals.length);
         expect(rows[0]).toContain(locale === "fr" ? '"Stock vendable"' : '"Sellable stock"');
         expect(rows[1]).toContain(key);
         expect(rows[1]).toContain(locale === "fr" ? '"Aucun stock vendable"' : '"No sellable stock"');
         expect(rows[1]).toMatch(/,"0","0","0"$/);
+        expect(rows[2]).toBe(Array(8).fill('""').join(","));
+        expect(rows[5].startsWith(locale === "fr" ? '"Enregistrements","1"' : '"Records","1"')).toBe(true);
+        const metricLabels=locale==="fr"?{onHand:"Stock physique",reserved:"Réservations et retenues",sellable:"Stock vendable"}:{onHand:"On-hand stock",reserved:"Reservations and holds",sellable:"Sellable stock"};
+        for(const row of registerBody.quantityTotals)expect(rows.some(line=>line.startsWith(`"${locale==="fr"?"Sous-total filtré":"Filtered subtotal"} · ${metricLabels[row.metric]} · ${row.unit}","${row.value} ${row.unit}"`))).toBe(true);
+        for(const row of registerBody.generalQuantityTotals)expect(rows.some(line=>line.startsWith(`"${locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters"} · ${metricLabels[row.metric]} · ${row.unit}","${row.value} ${row.unit}${row.precisionMismatch?(locale==="fr"?" · Précision à vérifier":" · Precision needs review"):""}"`))).toBe(true);
+        expect(rows.at(-2).startsWith(`"${locale === "fr" ? "Recherche" : "Search"}","${key}"`)).toBe(true);
+        expect(rows.at(-1).startsWith(locale === "fr" ? '"Dépôt","Tous les dépôts autorisés"' : '"Warehouse","All authorized warehouses"')).toBe(true);
+        const quantityCards=page.locator("[data-inventory-quantity-totals]").getByRole("region",{name:locale==="fr"?"Quantités filtrées, toutes pages":"Filtered quantities, all pages",exact:true});
+        for(const metric of Object.values(metricLabels))await expect(quantityCards.getByText(`${metric} · ${unit.symbol||unit.name}`,{exact:true})).toBeVisible();
+        await page.screenshot({path:test.info().outputPath(`1228-stock-${locale}-${theme}-${widths[0]}.png`),fullPage:true});
         if (locale === "en") {
           const xlsx = await downloadRegister("Excel");
           expect(xlsx.name).toMatch(/\.xlsx$/i);
@@ -635,9 +662,16 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
         await warehouseFilter.selectOption(fixture.warehouseId);
         const scopedStock = await scopedQuery;
         expect(scopedStock.ok()).toBeTruthy();
-        expect((await scopedStock.json()).items).toEqual([]);
+        const scopedBody=await scopedStock.json();
+        expect(scopedBody.items).toEqual([]);
+        expect(scopedBody.quantityTotals).toEqual([]);
+        expect(scopedBody.generalQuantityTotals).toEqual(registerBody.generalQuantityTotals);
         const scopedCsv = await downloadRegister("CSV");
-        expect(scopedCsv.bytes.toString("utf8").trim().split(/\r?\n/)).toHaveLength(1);
+        const scopedRows=scopedCsv.bytes.toString("utf8").trim().split(/\r?\n/);
+        expect(scopedRows).toHaveLength(7+scopedBody.generalQuantityTotals.length);
+        expect(scopedRows[1]).toBe(Array(8).fill('""').join(","));
+        expect(scopedRows[4].startsWith(locale==="fr"?'"Enregistrements","0"':'"Records","0"')).toBe(true);
+        expect(scopedRows.some(line=>line.startsWith(locale==="fr"?'"Sous-total filtré':'"Filtered subtotal'))).toBe(false);
         await warehouseFilter.selectOption("");
         const governance = page.getByTestId("inventory-stock-governance");
         await expect(governance.getByRole("heading", { name: locale === "fr" ? "Règles de stock, lots et péremptions" : "Stock rules, batches and expiry", exact: true })).toBeVisible();
@@ -694,6 +728,354 @@ test.describe.serial("Shop 2.0 Iteration 4 global behavioral acceptance", () => 
       }
     } finally {
       await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
+    }
+  });
+
+  test("#1228 commercial totals keep filtered, general and page scopes across currencies", async ({ page }, testInfo) => {
+    await signIn(page);
+    test.setTimeout(180_000);
+    const key=`E2E-1228-COMM-${Date.now()}`;
+    const user=await prisma.user.findUniqueOrThrow({where:{id:fixture.userId},select:{locale:true}});
+    const models=[["quotes","enterpriseQuote"],["sales-orders","enterpriseSalesOrder"],["purchases","enterprisePurchase"]];
+    try {
+      for(const [,model] of models) await prisma[model].createMany({data:Array.from({length:36},(_,i)=>({organizationId,reference:`${key}-${i}`,title:key,status:"DRAFT",currency:i%2?"USD":"CDF",subtotalAmount:"1.23",taxAmount:0,totalAmount:"1.23",createdByUserId:fixture.userId,...(model==="enterprisePurchase"?{requestedByUserId:fixture.userId}:{businessPartyId:fixture.customerId,discountAmount:0})}))});
+      for(const [endpoint] of models){
+        const query=`/api/enterprise/${organizationId}/${endpoint}?search=${key}&status=DRAFT&pageSize=5`;
+        const first=await apiGet(page,query+"&page=1"),second=await apiGet(page,query+"&page=2"),beyond=await apiGet(page,query+"&page=99");
+        expect(first.response.status(),JSON.stringify(first.body)).toBe(200);expect(first.body.pagination.total).toBe(36);
+        expect(first.body.items).toHaveLength(5);expect(second.body.items).toHaveLength(5);expect(beyond.body.items).toHaveLength(0);
+        expect(second.body.filteredTotals).toEqual(first.body.filteredTotals);expect(beyond.body.filteredTotals).toEqual(first.body.filteredTotals);
+        expect(second.body.generalTotals).toEqual(first.body.generalTotals);expect(beyond.body.pageTotals).toEqual([]);
+        for(const currencyCode of ["USD","CDF"])expect(first.body.filteredTotals.find(row=>row.currencyCode===currencyCode&&row.metric==="total"&&row.status==="DRAFT").amount).toBe("22.14");
+        expect(first.body.pageTotals.filter(row=>row.metric==="total").reduce((sum,row)=>sum.plus(row.amount),new Prisma.Decimal(0)).toFixed(2)).toBe("6.15");
+      }
+      for(const {locale,theme,width} of [{locale:"fr",theme:"dark",width:320},{locale:"en",theme:"light",width:1440},{locale:"fr",theme:"light",width:1440},{locale:"en",theme:"dark",width:320}]){
+        await prisma.user.update({where:{id:fixture.userId},data:{locale}});await page.setViewportSize({width,height:900});
+        await page.evaluate(value=>localStorage.setItem("theme",value),theme);
+        for(const moduleCode of ["SALES_QUOTES_ORDERS","SUPPLIERS_PURCHASES"]){
+          await page.goto(`/enterprise-modules/${moduleCode}`);
+          await expect(page.locator("html")).toHaveClass(new RegExp("\\b"+theme+"\\b"));
+          await expect(page.locator("html")).toHaveAttribute("lang",locale);
+          if(moduleCode==="SUPPLIERS_PURCHASES"){
+            const heading=page.locator("[data-erp-design2-register]").getByRole("heading",{name:locale==="fr"?"Achats":"Purchases",exact:true});
+            await expect(heading).toBeVisible();expect((await heading.boundingBox()).width).toBeGreaterThan(180);
+          }
+          const search=moduleCode==="SALES_QUOTES_ORDERS"?page.locator("[data-workspace-toolbar]").getByRole("textbox"):page.locator("[data-purchase-design2]").getByRole("textbox");
+          await search.fill(key);
+          const scopes=page.locator("[data-commercial-amount-scopes]");await expect(scopes).toBeVisible();
+          await expect(scopes).toContainText(locale==="fr"?"22,14":"22.14");
+          await scopes.locator("summary").click();await expect(scopes).toContainText(locale==="fr"?"sans filtres":"without filters");await expect(scopes).toContainText(locale==="fr"?"page affichée":"Displayed page");
+          const download=page.waitForEvent("download");const exportRoot=moduleCode==="SALES_QUOTES_ORDERS"?page.locator("[data-workspace-toolbar]"):page.locator("[data-purchase-design2]");await exportRoot.getByRole("button",{name:"CSV",exact:true}).click();const file=await download;expect(await file.failure()).toBeNull();
+          const exportNotice=page.getByRole("status").filter({hasText:locale==="fr"?"téléchargées en CSV":"downloaded as CSV"});
+          await expect(exportNotice.getByText(locale==="fr"?"Succès":"Success",{exact:true})).toBeVisible();
+          await expect(exportNotice.getByRole("button",{name:locale==="fr"?"Fermer la notification":"Dismiss notification",exact:true})).toBeVisible();
+          await expect(page.locator("footer")).toContainText(locale==="fr"?"Tous droits réservés":"All rights reserved");
+          const csv=(await readFile(await file.path())).toString("utf8");expect(csv).toContain(locale==="fr"?"Sous-total filtré":"Filtered subtotal");expect(csv).toContain(locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters");expect(csv).toContain(key);
+          if(moduleCode==="SALES_QUOTES_ORDERS"){await page.locator("[data-professional-tabs]").getByRole("button").nth(1).click();await expect(scopes).toContainText(locale==="fr"?"22,14":"22.14");}
+          expect(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth)).toBe(true);
+          await page.evaluate(()=>window.scrollTo(0,0));
+          await page.screenshot({path:testInfo.outputPath(`1228-${moduleCode}-${locale}-${theme}-${width}.png`),fullPage:true});
+        }
+      }
+    } finally {
+      await prisma.user.update({where:{id:fixture.userId},data:{locale:user.locale}});
+      for(const [,model] of models)await prisma[model].deleteMany({where:{organizationId,reference:{startsWith:key},status:"DRAFT"}});
+    }
+  });
+
+  test("#1228 catalog keeps conversion versions and refuses a changed unit", async ({ page }, testInfo) => {
+    await signIn(page);
+    const key = `E2E-1228-CONV-${Date.now()}`;
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: fixture.userId }, select: { locale: true } });
+    const unitIds = [];
+    let itemId;
+    try {
+      const unit = async (suffix, decimalScale) => {
+        const created = await prisma.enterpriseUnitOfMeasure.create({
+          data: { organizationId, code: `${key}-${suffix}`, name: `${key} ${suffix}`, decimalScale, createdByUserId: fixture.userId },
+        });
+        unitIds.push(created.id);
+        return created;
+      };
+      const carton = await unit("CARTON", 3);
+      const stock = await unit("STOCK", 6);
+      const item = await prisma.enterpriseCatalogItem.create({
+        data: { organizationId, code: key, name: key, normalizedName: key.toLowerCase(), unitOfMeasureId: stock.id, itemType: "PRODUCT", trackInventory: true, createdByUserId: fixture.userId },
+      });
+      itemId = item.id;
+      const openPanel = async (locale, width) => {
+        const french = locale === "fr";
+        await prisma.user.update({ where: { id: fixture.userId }, data: { locale } });
+        await page.setViewportSize({ width, height: 900 });
+        await page.goto("/enterprise-modules/CATALOG");
+        await expect(page.locator("html")).toHaveAttribute("lang", locale);
+        await page.getByPlaceholder(french ? "Nom, référence ou SKU…" : "Name, reference or SKU…").fill(key);
+        const register = french ? "Catalogue opérationnel" : "Operational catalog";
+        await page.getByRole("button", { name: new RegExp(register) }).click({ timeout: 15_000 });
+        await page.getByRole("dialog", { name: register, exact: true })
+          .getByRole("button", { name: `${french ? "Ouvrir" : "Open"} ${key}`, exact: true }).click({ timeout: 15_000 });
+        const panel = page.getByRole("region", { name: french ? "Conversions d’unités" : "Unit conversions", exact: true });
+        const search = french ? "Rechercher une unité" : "Search units";
+        await panel.getByRole("textbox", { name: search, exact: true }).fill(carton.name);
+        await panel.getByRole("button", { name: search, exact: true }).click();
+        const select = panel.getByRole("combobox", { name: french ? "Unité d’achat ou de vente" : "Purchase or sales unit" });
+        await select.selectOption(carton.id);
+        return panel;
+      };
+      const frenchPanel = await openPanel("fr", 320);
+      await frenchPanel.getByRole("textbox", { name: /^Facteur de conversion/ }).fill("12,123");
+      await frenchPanel.getByRole("button", { name: "Enregistrer la version", exact: true }).click();
+      await expect(frenchPanel.getByText(`1 ${carton.code} = 12,123 ${stock.code}`, { exact: true })).toBeVisible();
+      const precision = frenchPanel.getByText("3 → 6 décimales", { exact: true });
+      await expect(precision).toBeVisible();
+      expect(await precision.evaluate(element => element.scrollHeight <= element.clientHeight)).toBe(true);
+      await frenchPanel.getByRole("textbox", { name: /^Quantité source/ }).fill("1,001");
+      await frenchPanel.getByRole("button", { name: "Calculer", exact: true }).click();
+      await expect(frenchPanel.getByText(`1,001 ${carton.code} = 12,135123 ${stock.code} · Version 1`, { exact: true })).toBeVisible();
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+      await page.screenshot({ path: testInfo.outputPath("1228-catalog-conversion-fr-320.png") });
+
+      const nextCode = `${key}-PACK`;
+      await prisma.enterpriseUnitOfMeasure.update({ where: { id: carton.id }, data: { code: nextCode } });
+      const englishPanel = await openPanel("en", 1440);
+      await expect(englishPanel.getByText("A unit, its code or its precision changed. Save a new version.")).toBeVisible();
+      await expect(englishPanel.getByRole("button", { name: "Calculate", exact: true })).toHaveCount(0);
+      const endpoint = `/api/enterprise/${organizationId}/catalog/unit-conversions?catalogItemId=${item.id}&sourceUnitId=${carton.id}&quantity=1.001`;
+      expect((await apiGet(page, endpoint)).response.status()).toBe(409);
+      await englishPanel.getByRole("textbox", { name: /^Conversion factor/ }).fill("24");
+      await englishPanel.getByRole("button", { name: "Save version", exact: true }).click();
+      await expect(englishPanel.getByText(`1 ${nextCode} = 24 ${stock.code}`, { exact: true })).toBeVisible();
+      await expect(englishPanel.getByText(`1 ${carton.code} = 12.123 ${stock.code}`, { exact: true })).toBeVisible();
+      await expect(englishPanel.getByRole("button", { name: "Calculate", exact: true })).toBeVisible();
+      expect(await prisma.enterpriseInventoryItem.count({ where: { organizationId, catalogItemId: item.id } })).toBe(0);
+      await page.screenshot({ path: testInfo.outputPath("1228-catalog-conversion-en-1440.png") });
+    } finally {
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
+      if (itemId) {
+        await prisma.enterpriseOperationalEvent.deleteMany({ where: { organizationId, entityId: itemId, eventType: "CATALOG_UNIT_CONVERSION_VERSION_CREATED" } });
+        await prisma.enterpriseCatalogUnitConversion.deleteMany({ where: { organizationId, catalogItemId: itemId } });
+        await prisma.enterpriseCatalogItem.delete({ where: { id: itemId } });
+      }
+      await prisma.enterpriseUnitOfMeasure.deleteMany({ where: { organizationId, id: { in: unitIds } } });
+    }
+  });
+
+  test("#1228 project filters preserve portfolio totals and exact budget exports", async ({ page }) => {
+    await signIn(page);
+    const stamp = Date.now();
+    const key = `E2E-1228-PROJECT-${stamp}`;
+    const generalReference = `E2E-OUTSIDE-${stamp}`;
+    const moduleCode = "PROJECTS_SERVICES";
+    const where = { organizationId_moduleCode: { organizationId, moduleCode } };
+    const previousModule = await prisma.enterpriseModule.findUnique({ where });
+    const user = await prisma.user.findUniqueOrThrow({ where: { id: fixture.userId }, select: { locale: true } });
+    try {
+      await prisma.enterpriseModule.upsert({
+        where,
+        update: { isEnabled: true },
+        create: { organizationId, moduleCode, labelFr: "Projets", labelEn: "Projects", moduleCategory: "E2E", isEnabled: true, isCore: false, requiresPlanLevel: "STARTER", sortOrder: 948 },
+      });
+      const project = { organizationId, name: key, status: "ACTIVE", currency: "CDF", indicativeBudget: "9999999999999999.99", createdByUserId: fixture.userId };
+      await prisma.enterpriseProject.createMany({ data: [
+        ...Array.from({ length: 26 }, (_, index) => ({ ...project, reference: `${key}-${index}` })),
+        { ...project, name: "Unfiltered project", reference: generalReference, status: "COMPLETED", currency: "USD", indicativeBudget: "12.34" },
+      ] });
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: "fr" } });
+      await page.goto(`/enterprise-modules/${moduleCode}`);
+      await expect(page.locator("html")).toHaveAttribute("lang", "fr");
+      await page.getByPlaceholder("Projet ou référence…").fill(key);
+      const register = page.locator("[data-erp-design2-register]");
+      await expect(register.getByText("Page 1 sur 2 · 26 résultat(s)")).toBeVisible();
+      const summary = register.locator("[data-commercial-amount-scopes]");
+      const filtered = summary.getByRole("region", { name: "Sous-totaux filtrés (toutes pages)" });
+      const total = /259\s999\s999\s999\s999\s999,74/;
+      await expect(filtered).toContainText(total);
+      await expect(filtered).not.toContainText("USD");
+      await register.getByRole("button", { name: "Suivant", exact: true }).click();
+      await expect(register.getByText("Page 2 sur 2 · 26 résultat(s)")).toBeVisible();
+      await expect(filtered).toContainText(total);
+      await summary.locator("summary").click();
+      await expect(summary.getByRole("region", { name: "Sous-totaux de la page affichée" })).toContainText(/9\s999\s999\s999\s999\s999,99/);
+      await expect(summary.getByRole("region", { name: "Totaux généraux autorisés (sans filtres)" })).toContainText("USD");
+
+      const download = page.waitForEvent("download");
+      await register.getByRole("button", { name: "CSV", exact: true }).click();
+      const file = await download;
+      expect(await file.failure()).toBeNull();
+      const csv = (await readFile(await file.path())).toString("utf8");
+      expect(csv).toMatch(total);
+      expect(csv).toContain("9999999999999999.99");
+      expect(csv).toContain("Total général autorisé sans filtres");
+      expect(csv.split("\n").filter(line => line.includes(key) && line.includes("9999999999999999.99"))).toHaveLength(26);
+    } finally {
+      await prisma.user.update({ where: { id: fixture.userId }, data: { locale: user.locale } });
+      await prisma.enterpriseProject.deleteMany({ where: { organizationId, OR: [{ reference: { startsWith: key } }, { reference: generalReference }] } });
+      if (previousModule) {
+        await prisma.enterpriseModule.update({ where, data: { isEnabled: previousModule.isEnabled } });
+      } else {
+        await prisma.enterpriseModule.deleteMany({ where: { organizationId, moduleCode } });
+      }
+    }
+  });
+
+  test("#1228 quote API validates all seven effective catalog unit precisions", async ({page})=>{
+    await signIn(page);const key=`E2E-1228-UNIT-${Date.now()}`;const quoteIds=[],catalogIds=[],unitIds=[];
+    try{
+      for(let scale=0;scale<=6;scale++){
+        const unit=await prisma.enterpriseUnitOfMeasure.create({data:{organizationId,code:`${key}-${scale}`,name:`Precision ${scale}`,decimalScale:scale,createdByUserId:fixture.userId}});unitIds.push(unit.id);
+        const product=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:`${key}-${scale}`,name:`Unit product ${scale}`,normalizedName:`${key}-${scale}`.toLowerCase(),itemType:"PRODUCT",unitOfMeasureId:unit.id,currency:"USD",createdByUserId:fixture.userId}});catalogIds.push(product.id);
+        const quantity=scale?`1.${"0".repeat(scale-1)}1`:"1";
+        const payload={businessPartyId:fixture.customerId,title:`${key}-${scale}`,currency:"USD",items:[{catalogItemId:product.id,description:product.name,quantity:Number(quantity),unitPrice:10,discountRate:0,taxRate:0}]};
+        const accepted=await apiPost(page,`/api/enterprise/${organizationId}/quotes`,payload);expect(accepted.response.status(),JSON.stringify(accepted.body)).toBe(201);quoteIds.push(accepted.body.quote.id);
+        const saved=await prisma.enterpriseQuoteItem.findFirstOrThrow({where:{organizationId,quoteId:accepted.body.quote.id}});expect(saved.quantity.toFixed()).toBe(quantity);expect(saved.unitOfMeasureId).toBe(unit.id);
+        const rejected=await apiPost(page,`/api/enterprise/${organizationId}/quotes`,{...payload,items:[{...payload.items[0],quantity:Number(`1.${"0".repeat(scale)}1`)}]});
+        expect(rejected.response.status(),JSON.stringify(rejected.body)).toBe(400);expect(rejected.body.error).toBe(scale===6?"INVENTORY_PHYSICAL_QUANTITY_PRECISION":"INVENTORY_UNIT_QUANTITY_PRECISION");
+        expect(await prisma.enterpriseQuote.count({where:{organizationId,title:payload.title}})).toBe(1);
+      }
+    }finally{
+      await prisma.enterpriseQuote.deleteMany({where:{organizationId,id:{in:quoteIds},status:"DRAFT"}});
+      await prisma.enterpriseCatalogItem.deleteMany({where:{organizationId,id:{in:catalogIds}}});await prisma.enterpriseUnitOfMeasure.deleteMany({where:{organizationId,id:{in:unitIds}}});
+    }
+  });
+
+  test("#1228 purchase receipt API preserves micro-units and rejects an unproven unit change", async ({ page }) => {
+    test.setTimeout(90_000);
+    await signIn(page);
+    const key = `E2E-1228-RECEIPT-${Date.now()}`;
+    const endpoint = `/api/enterprise/${organizationId}/purchases`;
+    const units = [];
+    let catalogItem, purchase;
+    try {
+      for (const suffix of ["ORDER", "OTHER"]) {
+        const unit = await prisma.enterpriseUnitOfMeasure.create({ data: {
+          organizationId, code: `${key}-${suffix}`, name: `Precision ${suffix}`, symbol: "u", decimalScale: 6, createdByUserId: fixture.userId,
+        } });
+        units.push(unit);
+      }
+      catalogItem = await prisma.enterpriseCatalogItem.create({ data: {
+        organizationId, code: key, name: key, normalizedName: key.toLowerCase(), itemType: "SERVICE", unitOfMeasureId: units[0].id, currency: fixture.currencyCode, createdByUserId: fixture.userId,
+      } });
+      const created = await apiPost(page, endpoint, {
+        title: key, currency: fixture.currencyCode, buyerUserId: fixture.userId,
+        items: [{ catalogItemId: catalogItem.id, description: catalogItem.name, quantity: "0.000007", unit: "u", unitPrice: 100000, taxRate: 0 }],
+      });
+      expect(created.response.status(), JSON.stringify(created.body)).toBe(201);
+      purchase = created.body.purchase;
+      const line = purchase.items[0];
+      expect(String(line.quantity)).toBe("0.000007");
+      await prisma.enterprisePurchase.update({ where: { id: purchase.id }, data: { status: "ORDERED", orderedAt: new Date() } });
+      const detailPath = `${endpoint}/${purchase.id}`;
+      const readRemaining = async () => {
+        const detail = await apiGet(page, detailPath);
+        expect(detail.response.status(), JSON.stringify(detail.body)).toBe(200);
+        return detail.body.receiptQuantities.find((quantity) => quantity.purchaseItemId === line.id);
+      };
+      expect(await readRemaining()).toMatchObject({ remaining: "0.000007", decimalScale: 6 });
+      const receive = (quantityReceived, revision = purchase.revision) => apiPost(page, `${detailPath}/receive`, {
+        revision, receivedAt: new Date().toISOString(), items: [{ purchaseItemId: line.id, quantityReceived }],
+      });
+      await prisma.enterpriseCatalogItem.update({ where: { id: catalogItem.id }, data: { unitOfMeasureId: units[1].id } });
+      expect(await readRemaining()).toMatchObject({ remaining: "0.000007", decimalScale: null });
+      const refused = await receive("0.000003");
+      expect(refused.response.status(), JSON.stringify(refused.body)).toBe(409);
+      expect(refused.body.error).toBe("INVENTORY_UNIT_CONVERSION_REQUIRED");
+      expect(await prisma.enterprisePurchaseReceipt.count({ where: { organizationId, purchaseId: purchase.id } })).toBe(0);
+
+      await prisma.enterpriseCatalogItem.update({ where: { id: catalogItem.id }, data: { unitOfMeasureId: units[0].id } });
+      const partial = await receive("0.000003");
+      expect(partial.response.status(), JSON.stringify(partial.body)).toBe(201);
+      expect(partial.body.purchase.status).toBe("PARTIALLY_RECEIVED");
+      expect(await readRemaining()).toMatchObject({ remaining: "0.000004", decimalScale: 6 });
+      const complete = await receive("0.000004", partial.body.purchase.revision);
+      expect(complete.response.status(), JSON.stringify(complete.body)).toBe(201);
+      expect(complete.body.purchase.status).toBe("RECEIVED");
+      expect(await readRemaining()).toMatchObject({ remaining: "0", decimalScale: 6 });
+      const printable = await page.context().request.get(`${detailPath}/print?lang=en`);
+      expect(printable.status(), await printable.text()).toBe(200);
+      expect(await printable.text()).toContain("0.000007");
+    } finally {
+      if (purchase) {
+        const receipts = await prisma.enterprisePurchaseReceipt.findMany({ where: { organizationId, purchaseId: purchase.id }, include: { items: true } });
+        await prisma.enterprisePurchaseReceiptItemStockLink.deleteMany({ where: { organizationId, purchaseReceiptItemId: { in: receipts.flatMap((receipt) => receipt.items.map((item) => item.id)) } } });
+        await prisma.enterprisePurchaseReceiptOperationalLink.deleteMany({ where: { organizationId, purchaseReceiptId: { in: receipts.map((receipt) => receipt.id) } } });
+        await prisma.enterprisePurchaseReceipt.deleteMany({ where: { organizationId, purchaseId: purchase.id } });
+        await prisma.enterprisePurchaseItemCatalogLink.deleteMany({ where: { organizationId, purchaseItemId: { in: purchase.items.map((item) => item.id) } } });
+        await prisma.enterprisePurchase.delete({ where: { id: purchase.id } });
+      }
+      if (catalogItem) await prisma.enterpriseCatalogItem.delete({ where: { id: catalogItem.id } });
+      await prisma.enterpriseUnitOfMeasure.deleteMany({ where: { organizationId, id: { in: units.map((unit) => unit.id) } } });
+    }
+  });
+
+  test("#1228 full-capacity stock stays exact and keyboard-readable in every viewport",async({page},testInfo)=>{
+    test.setTimeout(180_000);await signIn(page);const key=`E2E-1228-CAP-${Date.now()}`;
+    const user=await prisma.user.findUniqueOrThrow({where:{id:fixture.userId},select:{locale:true}});
+    let unit,product,inventory;
+    try{
+      unit=await prisma.enterpriseUnitOfMeasure.create({data:{organizationId,code:key,name:"Micro-unit",symbol:"q",decimalScale:6,createdByUserId:fixture.userId}});
+      product=await prisma.enterpriseCatalogItem.create({data:{organizationId,code:key,name:key,normalizedName:key.toLowerCase(),itemType:"PRODUCT",trackInventory:true,unitOfMeasureId:unit.id,createdByUserId:fixture.userId}});
+      inventory=await prisma.enterpriseInventoryItem.create({data:{organizationId,catalogItemId:product.id,createdByUserId:fixture.userId}});
+      await prisma.enterpriseInventoryBalance.create({data:{organizationId,inventoryItemId:inventory.id,warehouseId:fixture.warehouseId,quantityOnHand:"999999999999999.999999",quantityReserved:"0.000001"}});
+      for(const locale of ["fr","en"])for(const theme of ["light","dark"]){
+        await prisma.user.update({where:{id:fixture.userId},data:{locale}});await page.evaluate(value=>localStorage.setItem("theme",value),theme);
+        await page.goto("/enterprise-modules/INVENTORY_LOGISTICS");await expect(page.locator("html")).toHaveAttribute("lang",locale);
+        const query=page.waitForResponse(response=>{const url=new URL(response.url());return url.pathname===`/api/enterprise/${organizationId}/inventory`&&url.searchParams.get("search")===key;});
+        await page.locator("[data-workspace-toolbar]").getByRole("textbox").fill(key);const response=await query;expect(response.ok(),await response.text()).toBe(true);
+        const body=await response.json();expect(body.items[0].quantityOnHandExact).toBe("999999999999999.999999");expect(body.items[0].quantityReservedExact).toBe("0.000001");expect(body.items[0].quantityAvailableExact).toBe("999999999999999.999998");
+        const totals=page.locator("[data-inventory-quantity-totals]").getByRole("region",{name:locale==="fr"?"Quantités filtrées, toutes pages":"Filtered quantities, all pages",exact:true});
+        await expect(totals).toContainText(locale==="fr"?"999 999 999 999 999,999999 q":"999,999,999,999,999.999999 q");
+        await expect(totals).toContainText(locale==="fr"?"0,000001 q":"0.000001 q");
+        await expect(totals).toContainText(locale==="fr"?"999 999 999 999 999,999998 q":"999,999,999,999,999.999998 q");
+        for(const width of [320,360,375,390,414,768,1024,1440]){
+          await page.setViewportSize({width,height:900});await expect(page.locator("html")).toHaveClass(new RegExp("\\b"+theme+"\\b"));
+          const rail=totals.getByRole("group");
+          if(await rail.evaluate(element=>element.scrollWidth>element.clientWidth)){
+            const atEnd=()=>rail.evaluate(element=>element.scrollLeft+element.clientWidth>=element.scrollWidth-2);
+            const atStart=()=>rail.evaluate(element=>element.scrollLeft<=2);
+            await rail.focus();
+            await page.keyboard.press("Home");
+            await expect.poll(atStart).toBe(true);
+            for(let i=0;i<14;i++)await page.keyboard.press("ArrowRight");
+            await expect.poll(atEnd).toBe(true);
+            for(let i=0;i<14;i++)await page.keyboard.press("ArrowLeft");
+            await expect.poll(atStart).toBe(true);
+            await page.keyboard.press("End");
+            await expect.poll(atEnd).toBe(true);
+            await page.keyboard.press("Home");
+            await expect.poll(atStart).toBe(true);
+          }
+          expect(await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth)).toBeLessThanOrEqual(2);
+          await page.evaluate(()=>window.scrollTo(0,0));await page.screenshot({path:testInfo.outputPath(`1228-stock-capacity-${locale}-${theme}-${width}.png`),fullPage:true});
+        }
+      }
+      const stockForms = [
+        { button: "New transfer", title: "New inventory transfer", field: "quantity" },
+        { button: "New inventory count", title: "New inventory count campaign", field: "countedQuantity" },
+        { button: "Adjustment", title: "Controlled adjustment", field: "quantity" },
+      ];
+      for (const { button, title, field } of stockForms) {
+        await page.getByRole("button", { name: button, exact: true }).click();
+        const dialog = page.getByRole("dialog", { name: title });
+        const input = dialog.locator(`[name="${field}"]`);
+        await expect(input).toBeDisabled();
+        await dialog.locator('[name="inventoryItemId"]').selectOption(inventory.id);
+        await expect(input).toBeEnabled();
+        await expect(input).toHaveAttribute("step", "0.000001");
+        await input.fill("0.0000001");
+        expect(await input.evaluate((element) => element.validity.valid)).toBe(false);
+        await input.fill("0.000001");
+        expect(await input.evaluate((element) => element.validity.valid)).toBe(true);
+        if (field === "countedQuantity") {
+          await input.fill("0");
+          expect(await input.evaluate((element) => element.validity.valid)).toBe(true);
+        }
+        await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+        await expect(dialog).toBeHidden();
+      }
+    }finally{
+      await prisma.user.update({where:{id:fixture.userId},data:{locale:user.locale}});
+      if(inventory){await prisma.enterpriseInventoryBalance.deleteMany({where:{organizationId,inventoryItemId:inventory.id}});await prisma.enterpriseInventoryItem.deleteMany({where:{organizationId,id:inventory.id}});}
+      if(product)await prisma.enterpriseCatalogItem.deleteMany({where:{organizationId,id:product.id}});if(unit)await prisma.enterpriseUnitOfMeasure.deleteMany({where:{organizationId,id:unit.id}});
     }
   });
 

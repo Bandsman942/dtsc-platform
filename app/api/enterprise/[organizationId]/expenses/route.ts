@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { enterpriseValidationErrorResponse } from "@/lib/enterprise/common/http";
+import { commercialAmountTotals, commercialPageTotals } from "@/lib/enterprise/common/analytics";
 import { getSession } from "@/lib/auth";
 import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
@@ -39,7 +40,8 @@ export async function GET(req: Request, { params }: Params) {
   const search = url.searchParams.get("search")?.trim();
   const from = url.searchParams.get("from");
   const to = url.searchParams.get("to");
-  const filters: Prisma.EnterpriseExpenseWhereInput[] = [enterpriseExpenseVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll })];
+  const visibility = enterpriseExpenseVisibilityWhere({ organizationId, userId: session.userId, canSeeAll: access.canSeeAll });
+  const filters: Prisma.EnterpriseExpenseWhereInput[] = [visibility];
   if (status) filters.push({ status });
   if (category) filters.push({ category });
   if (supplierId) filters.push({ supplierId });
@@ -53,20 +55,30 @@ export async function GET(req: Request, { params }: Params) {
   if (dates.from || dates.to) filters.push({ expenseDate: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } });
 
   const where: Prisma.EnterpriseExpenseWhereInput = { AND: filters };
-  const [rows, total] = await Promise.all([
-    prisma.enterpriseExpense.findMany({
-      where,
-      include: {
-        supplier: { select: { id: true, legalName: true, displayName: true } },
-        purchase: { select: { id: true, reference: true, title: true, totalAmount: true } },
-        budgetLine: { select: { id: true, name: true, budget: { select: { id: true, reference: true, title: true, currency: true, status: true } } } },
-      },
-      orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-    }),
-    prisma.enterpriseExpense.count({ where }),
-  ]);
+  const [rows, total, filteredGroups, generalGroups] = await prisma.$transaction(async (tx) => {
+    const aggregate = (scope: Prisma.EnterpriseExpenseWhereInput) => tx.enterpriseExpense.groupBy({
+      by: ["currency", "status"],
+      where: scope,
+      _sum: { amount: true },
+    });
+    const general = aggregate(visibility);
+    return Promise.all([
+      tx.enterpriseExpense.findMany({
+        where,
+        include: {
+          supplier: { select: { id: true, legalName: true, displayName: true } },
+          purchase: { select: { id: true, reference: true, title: true, totalAmount: true } },
+          budgetLine: { select: { id: true, name: true, budget: { select: { id: true, reference: true, title: true, currency: true, status: true } } } },
+        },
+        orderBy: [{ expenseDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+      }),
+      tx.enterpriseExpense.count({ where }),
+      filters.length === 1 ? general : aggregate(where),
+      general,
+    ]);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   const items = rows.map((item) => {
     const canOwn = access.canManage || item.createdByUserId === session.userId || item.requestedByUserId === session.userId;
     return {
@@ -80,7 +92,15 @@ export async function GET(req: Request, { params }: Params) {
     };
   });
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "expenses", page, pageSize } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, canManage: access.canManage, canCreate: access.canCreate });
+  return NextResponse.json({
+    items,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    filteredTotals: commercialAmountTotals(filteredGroups.map(({ currency, status, _sum }) => ({ currency, status, _sum: { totalAmount: _sum.amount } }))),
+    generalTotals: commercialAmountTotals(generalGroups.map(({ currency, status, _sum }) => ({ currency, status, _sum: { totalAmount: _sum.amount } }))),
+    pageTotals: commercialPageTotals(rows.map(({ currency, status, amount }) => ({ currency, status, totalAmount: amount }))),
+    canManage: access.canManage,
+    canCreate: access.canCreate,
+  });
 }
 
 export async function POST(req: Request, { params }: Params) {

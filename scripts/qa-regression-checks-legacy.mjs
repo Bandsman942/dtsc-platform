@@ -564,7 +564,7 @@ check(
 
 check(
   "HEALTH_CARE Facturation médicale: tableau de bord, lignes, paiements et mobile",
-  containsAll(healthBillingWorkspace, ["ListControls", "ActionMenu", "Factures du jour", "Solde restant", "Enregistrer un paiement", "Aucune facture médicale enregistrée", "h-[94dvh]", "CircleHelp", "min-w-0", "overflow-hidden"])
+  containsAll(healthBillingWorkspace, ["ListControls", "ActionMenu", "ModuleMetrics", "FinanceAmountScopes", "billing.today", "billing.balance", "billing.recordPayment", "billing.noInvoices", "h-[94dvh]", "CircleHelp", "min-w-0"])
     && !healthBillingWorkspace.includes("window.prompt")
     && !healthBillingWorkspace.includes("window.confirm")
 );

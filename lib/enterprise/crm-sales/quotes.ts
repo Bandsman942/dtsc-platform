@@ -1,11 +1,12 @@
+import { resolveSalesQuantitiesTx } from "@/lib/enterprise/crm-sales/quantity";
 import type { z } from "zod";
+import { money, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseDomainConflictError, EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { QUOTE_TRANSITIONS } from "@/lib/enterprise/crm-sales/constants";
 import {
   assertActiveClientOrganization,
   enterpriseReference,
   publishEnterpriseEvent,
-  roundMoney,
 } from "@/lib/enterprise/crm-sales/helpers";
 import type { quoteCreateSchema, quoteTransitionSchema } from "@/lib/enterprise/crm-sales/schemas";
 import { prisma } from "@/lib/prisma";
@@ -30,32 +31,35 @@ export async function createEnterpriseQuote(organizationId: string, actorUserId:
       if (!opportunity) throw new EnterpriseDomainError("OPPORTUNITY_NOT_FOUND", 404);
     }
 
-    const catalogIds = [...new Set(input.items.map((item) => item.catalogItemId).filter((id): id is string => Boolean(id)))];
-    if (catalogIds.length) {
-      const count = await tx.enterpriseCatalogItem.count({
-        where: { organizationId, id: { in: catalogIds }, status: "ACTIVE", archivedAt: null },
-      });
-      if (count !== catalogIds.length) throw new EnterpriseDomainError("CATALOG_ITEM_NOT_FOUND", 404);
-    }
+    const quantities = await resolveSalesQuantitiesTx(tx, organizationId, input.items);
 
     const calculatedItems = input.items.map((item, index) => {
-      const lineSubtotal = roundMoney(item.quantity * item.unitPrice);
-      const discountAmount = roundMoney(lineSubtotal * (item.discountRate / 100));
-      const taxableBase = roundMoney(lineSubtotal - discountAmount);
-      const taxAmount = roundMoney(taxableBase * (item.taxRate / 100));
+      const quantity = quantities[index].quantity;
+      const unitPrice = money(item.unitPrice, 2);
+      const discountRate = money(item.discountRate, 4);
+      const taxRate = money(item.taxRate, 4);
+      const lineSubtotal = money(quantity.times(unitPrice), 2);
+      const discountAmount = money(lineSubtotal.times(discountRate).div(100), 2);
+      const taxableBase = lineSubtotal.minus(discountAmount);
+      const taxAmount = money(taxableBase.times(taxRate).div(100), 2);
       return {
         ...item,
+        quantity,
+        unitPrice,
+        discountRate,
+        taxRate,
+        unitOfMeasureId: quantities[index].unitOfMeasureId,
         lineSubtotal,
         discountAmount,
         taxAmount,
-        lineTotal: roundMoney(taxableBase + taxAmount),
+        lineTotal: taxableBase.plus(taxAmount),
         sortOrder: index,
       };
     });
-    const subtotalAmount = roundMoney(calculatedItems.reduce((sum, item) => sum + item.lineSubtotal, 0));
-    const discountAmount = roundMoney(calculatedItems.reduce((sum, item) => sum + item.discountAmount, 0));
-    const taxAmount = roundMoney(calculatedItems.reduce((sum, item) => sum + item.taxAmount, 0));
-    const totalAmount = roundMoney(calculatedItems.reduce((sum, item) => sum + item.lineTotal, 0));
+    const subtotalAmount = sumDecimals(calculatedItems.map(item => item.lineSubtotal));
+    const discountAmount = sumDecimals(calculatedItems.map(item => item.discountAmount));
+    const taxAmount = sumDecimals(calculatedItems.map(item => item.taxAmount));
+    const totalAmount = sumDecimals(calculatedItems.map(item => item.lineTotal));
 
     const quote = await tx.enterpriseQuote.create({
       data: {
@@ -102,7 +106,7 @@ export async function createEnterpriseQuote(organizationId: string, actorUserId:
       summary: `Devis ${quote.reference} créé`,
       actorUserId,
       toStatus: quote.status,
-      metadataJson: { totalAmount, currency: quote.currency },
+      metadataJson: { totalAmount: totalAmount.toNumber(), currency: quote.currency },
     });
     return quote;
   });
@@ -159,6 +163,13 @@ export async function convertEnterpriseQuoteToOrder(organizationId: string, quot
     }
     if (quote.status !== "ACCEPTED") throw new EnterpriseDomainError("QUOTE_MUST_BE_ACCEPTED", 409);
     if (quote.revision !== revision) throw new EnterpriseDomainConflictError();
+
+    // Legacy catalog lines without a recorded unit cannot prove which unit
+    // their accepted quantity represents. Preserve the quote and require review.
+    if (quote.items.some(item => item.catalogItemId && !item.unitOfMeasureId)) {
+      throw new EnterpriseDomainError("INVENTORY_UNIT_CONVERSION_REQUIRED", 409);
+    }
+    await resolveSalesQuantitiesTx(tx, organizationId, quote.items);
 
     const order = await tx.enterpriseSalesOrder.create({
       data: {

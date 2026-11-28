@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { formatInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { inventoryValuationQuerySchema } from "@/lib/enterprise/accounting/finance-domain-schemas";
@@ -77,6 +78,7 @@ export async function GET(req: Request, { params }: Params) {
     return NextResponse.json({
       items: [],
       pagination: { page: 1, pageSize, total: 0, pageCount: 1 },
+      filteredTotals: [],
       scope: "COMMON_INVENTORY_ONLY",
       valuationMethod: "WEIGHTED_AVERAGE",
     });
@@ -94,7 +96,7 @@ export async function GET(req: Request, { params }: Params) {
   const whereSql = Prisma.join(filters, " AND ");
   const offset = (page - 1) * pageSize;
 
-  const [countRows, rows] = await Promise.all([
+  const [countRows, rows, filteredTotals] = await prisma.$transaction([
     prisma.$queryRaw<Array<{ count: bigint }>>(Prisma.sql`
       SELECT COUNT(*)::bigint AS "count"
       FROM (
@@ -123,7 +125,14 @@ export async function GET(req: Request, { params }: Params) {
       LIMIT ${pageSize}
       OFFSET ${offset}
     `),
-  ]);
+    prisma.$queryRaw<Array<{ currencyCode: string; value: Prisma.Decimal }>>(Prisma.sql`
+      SELECT "currencyCode", SUM("remainingQuantity" * "unitCost") AS "value"
+      FROM "EnterpriseInventoryCostLayer"
+      WHERE ${whereSql}
+      GROUP BY "currencyCode"
+      ORDER BY "currencyCode"
+    `),
+  ], { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   const inventoryItemIds = [...new Set(rows.map((row) => row.inventoryItemId))];
   const warehouseIds = [...new Set(rows.map((row) => row.warehouseId).filter((value): value is string => Boolean(value)))];
@@ -133,7 +142,7 @@ export async function GET(req: Request, { params }: Params) {
           where: { organizationId, id: { in: inventoryItemIds } },
           select: {
             id: true,
-            catalogItem: { select: { code: true, sku: true, name: true } },
+            catalogItem: { select: { code: true, sku: true, name: true, unitOfMeasure: { select: { name: true, symbol: true, decimalScale: true } } } },
           },
         })
       : Promise.resolve([]),
@@ -159,6 +168,8 @@ export async function GET(req: Request, { params }: Params) {
     items: rows.map((row) => {
       const catalogItem = inventoryItemById.get(row.inventoryItemId);
       const warehouse = row.warehouseId ? warehouseById.get(row.warehouseId) : null;
+      const unit = catalogItem?.unitOfMeasure;
+      const quantityDisplay = formatInventoryQuantity(row.quantity, unit?.decimalScale ?? -1);
       return {
         id: `${row.inventoryItemId}:${row.warehouseId || "global"}:${row.currencyCode}`,
         inventoryItemId: row.inventoryItemId,
@@ -169,12 +180,16 @@ export async function GET(req: Request, { params }: Params) {
         warehouseCode: warehouse?.code || null,
         warehouseName: warehouse?.name || "Tous les entrepôts",
         currencyCode: row.currencyCode,
-        quantity: row.quantity.toFixed(3),
+        quantity: quantityDisplay.value,
+        quantityUnit: unit?.symbol || unit?.name || null,
+        quantityDecimalScale: unit?.decimalScale ?? null,
+        quantityPrecisionMismatch: quantityDisplay.precisionMismatch,
         value: row.value.toFixed(6),
         weightedAverageUnitCost: row.weightedAverageUnitCost.toFixed(6),
         status: "VALUED",
       };
     }),
+    filteredTotals: filteredTotals.map((row) => ({ currencyCode: row.currencyCode, value: row.value.toFixed(6) })),
     pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
     scope: "COMMON_INVENTORY_ONLY",
     valuationMethod: "WEIGHTED_AVERAGE",

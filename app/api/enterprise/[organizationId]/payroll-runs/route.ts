@@ -4,6 +4,7 @@ import { financeBusinessDateRange } from "@/lib/enterprise/accounting/http";
 import { getSession } from "@/lib/auth";
 import { writeApiLog, writeAuditLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { payrollAmountTotals, payrollPageTotals } from "@/lib/enterprise/common/analytics";
 import { enterpriseDomainErrorResponse } from "@/lib/enterprise/common/http";
 import { prepareEnterprisePayrollRun } from "@/lib/enterprise/hr-payroll/payroll";
 import { payrollRunPrepareSchema } from "@/lib/enterprise/hr-payroll/schemas";
@@ -41,35 +42,55 @@ export async function GET(req: Request, { params }: Params) {
       ...(writeAccess ? [{ preparedByUserId: session.userId }] : []),
     ],
   };
+  const authorized = { organizationId, archivedAt: null, ...actorScope };
   const where: Prisma.EnterprisePayrollRunWhereInput = {
-    organizationId, ...businessDateFilter, archivedAt: null, ...actorScope,
+    ...authorized, ...businessDateFilter,
     ...(status ? { status } : {}), ...(payrollPeriodId ? { payrollPeriodId } : {}),
   };
   if (!manageAccess && !approvalAccess && !writeAccess) {
     await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "payroll-runs-self-only" } });
     return NextResponse.json({ items: [], pagination: { page, pageSize, total: 0, pageCount: 1 }, metrics: { pendingApproval: 0, approved: 0 }, canManage: false }, { headers: { "Cache-Control": "private, no-store" } });
   }
-  const [rawItems, total, pendingApproval, approved] = await Promise.all([
-    prisma.enterprisePayrollRun.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        payrollPeriod: true,
-        items: { include: { employee: { select: { employeeNumber: true, displayName: true } }, payslip: true } },
-      },
-    }),
-    prisma.enterprisePayrollRun.count({ where }),
-    prisma.enterprisePayrollRun.count({ where: { organizationId, archivedAt: null, ...actorScope, status: "PENDING_APPROVAL" } }),
-    prisma.enterprisePayrollRun.count({ where: { organizationId, archivedAt: null, ...actorScope, status: "APPROVED" } }),
-  ]);
+  const [rawItems, total, filteredGroups, generalGroups] = await prisma.$transaction(async (tx) => {
+    const aggregate = (scope: Prisma.EnterprisePayrollRunWhereInput) => tx.enterprisePayrollRun.groupBy({
+      by: ["currency", "status"],
+      where: scope,
+      _sum: { grossAmount: true, bonusAmount: true, deductionAmount: true, netAmount: true },
+      _count: { _all: true },
+    });
+    const general = aggregate(authorized);
+    const hasFilters = Boolean(status || payrollPeriodId || businessPeriod.from || businessPeriod.to);
+    return Promise.all([
+      tx.enterprisePayrollRun.findMany({
+        where,
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          payrollPeriod: true,
+          items: { include: { employee: { select: { employeeNumber: true, displayName: true } }, payslip: true } },
+        },
+      }),
+      tx.enterprisePayrollRun.count({ where }),
+      hasFilters ? aggregate(where) : general,
+      general,
+    ]);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
+  const countByStatus = (status: string) => filteredGroups.reduce((sum, group) => sum + (group.status === status ? group._count._all : 0), 0);
   const items = rawItems.map((item) => ({
     ...item,
     canDecide: Boolean(approvalAccess && item.status === "PENDING_APPROVAL" && item.approverUserId === session.userId),
   }));
   await writeApiLog({ request: req, statusCode: 200, userId: session.userId, startedAt, metadata: { organizationId, domain: "payroll-runs", page } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, metrics: { pendingApproval, approved }, canManage: access.canManage });
+  return NextResponse.json({
+    items,
+    pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+    metrics: { pendingApproval: countByStatus("PENDING_APPROVAL"), approved: countByStatus("APPROVED") },
+    filteredTotals: payrollAmountTotals(filteredGroups),
+    generalTotals: payrollAmountTotals(generalGroups),
+    pageTotals: payrollPageTotals(rawItems),
+    canManage: access.canManage,
+  }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 export async function POST(req: Request, { params }: Params) {

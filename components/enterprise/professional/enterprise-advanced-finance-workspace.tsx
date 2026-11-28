@@ -20,7 +20,7 @@ import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18
 
 type Item = Record<string, unknown> & { id: string; status?: string; revision?: number };
 type Pagination = { page: number; pageSize: number; total: number; pageCount: number };
-type Payload = { items?: Item[]; metrics?: Record<string, number>; pagination?: Pagination; availableAssets?: Item[]; scope?: string; valuationMethod?: string; disclaimer?: string };
+type Payload = { items?: Item[]; metrics?: Record<string, number>; pagination?: Pagination; availableAssets?: Item[]; scope?: string; valuationMethod?: string; filteredTotals?: Array<{ currencyCode: string; value: string }>; disclaimer?: string };
 type LookupState = { charts: Item[]; years: Item[]; periods: Item[]; journals: Item[]; accounts: Item[]; assets: Item[] };
 type FormState = Record<string, string | boolean>;
 type SectionDefinition = { key: string; labelKey: EnterpriseFinanceKey; endpoint: string };
@@ -107,7 +107,7 @@ function itemTitle(item: Item, activeKey: string, locale: FinanceLocale) {
   if (activeKey === "trial") return `${text(item, "code")} · ${locale === "fr" ? text(item, "nameFr") : text(item, "nameNameEn")}`;
   if (activeKey === "rules") return text(item, "mappingKey");
   if (activeKey === "anomalies") return text(item, "reference") || businessLabel(item.postingEvent, locale);
-  if (activeKey === "inventory") return text(item, "inventoryItemName") || text(item, "itemName") || text(item, "inventoryItemId") || ft(locale, "valuedItem");
+  if (activeKey === "inventory") return text(item, "inventoryItemName") || text(item, "itemName") || ft(locale, "valuedItem");
   if (activeKey === "statements") return businessLabel(item.statementType, locale);
   return text(item, "number") || text(item, "code") || text(item, "nameFr") || text(item, "nameEn") || text(item, "reference") || ft(locale, "accountingItem");
 }
@@ -125,7 +125,7 @@ function itemDescription(item: Item, activeKey: string, locale: FinanceLocale) {
   if (activeKey === "close") return nestedText(item, "fiscalPeriod", "code");
   if (activeKey === "statements") return `${financeDate(item.periodStart, locale)} → ${financeDate(item.periodEnd, locale)} · ${text(item, "currencyCode")}`;
   if (activeKey === "assets") return `${businessLabel(item.depreciationMethod, locale)} · ${text(item, "usefulLifeMonths")} ${ft(locale, "months")}`;
-  if (activeKey === "inventory") return `${text(item, "quantity")} × ${financeMoney(item.weightedAverageUnitCost, text(item, "currencyCode") || "USD", locale)}`;
+  if (activeKey === "inventory") return `${[text(item, "quantity"), text(item, "quantityUnit")].filter(Boolean).join(" ")} × ${financeMoney(item.weightedAverageUnitCost, text(item, "currencyCode"), locale)}${item.quantityPrecisionMismatch ? (locale === "fr" ? " · Précision historique à vérifier" : " · Historical precision needs review") : ""}`;
   return formatAccountingNarrative(text(item, "description"), locale) || (locale === "fr" ? text(item, "nameFr") : text(item, "nameEn")) || "";
 }
 function amountSummary(item: Item, activeKey: string, locale: FinanceLocale) {
@@ -335,6 +335,8 @@ export function EnterpriseAdvancedFinanceWorkspace({ organizationId, organizatio
     </ModuleSection> : null}
 
     {activeKey === "inventory" ? <InventoryUnvaluedReceiptsPanel organizationId={organizationId} locale={locale} canManage={canManage} onPosted={load} /> : null}
+
+    {activeKey === "inventory" && !loading && !error && payload.filteredTotals?.length ? <ModuleMetrics>{payload.filteredTotals.map((row) => <ModuleMetric key={row.currencyCode} label={locale === "fr" ? `Sous-total filtré · ${row.currencyCode}` : `Filtered subtotal · ${row.currencyCode}`} value={financeMoney(row.value, row.currencyCode, locale)} />)}</ModuleMetrics> : null}
 
     <ModuleContent><ModuleSection title={activeSection ? t(activeSection.labelKey) : (locale === "fr" ? definition.labelFr : definition.labelEn)} description={sectionDescription} count={pagination.total}>
       {loading ? <div className="space-y-3">{Array.from({ length: 4 }).map((_, index) => <div key={index} className="h-28 animate-pulse rounded-xl bg-dtsc-soft" />)}</div> : items.length === 0 ? <div className="flex min-h-48 flex-col items-center justify-center border-y border-dashed border-dtsc-border py-10 text-center"><BookOpen className="h-8 w-8 text-dtsc-muted" /><p className="mt-3 font-black text-dtsc-ink">{t("noDataForView")}</p><p className="mt-1 max-w-xl text-sm text-dtsc-muted">{t("useActionOrFilters")}</p></div> : <div className="divide-y divide-dtsc-border border-y border-dtsc-border">

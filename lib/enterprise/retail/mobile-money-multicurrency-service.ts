@@ -4,7 +4,10 @@ import { ensureMobileMoneyFxLedgerMappingsTx } from "@/lib/enterprise/accounting
 import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service";
 import { financeReference, money, publishFinanceEvent } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
+import { assertMobileMoneyFxWalletAccess } from "@/lib/enterprise/retail/mobile-money-fx-access";
+import { assertMobileMoneyGlobalMappingAccess, mobileMoneyWalletConfigurationScope, mobileMoneyOperationWalletWhere } from "@/lib/enterprise/retail/mobile-money-wallet-configuration-access";
 import { requiredRetailOperatorCurrencies } from "@/lib/enterprise/retail/operator-currency-policy";
+import { finalizeMobileMoneyFxReversalAccountingTx } from "@/lib/enterprise/retail/mobile-money-accounting";
 import { prisma } from "@/lib/prisma";
 
 const MOBILE_MONEY_FLOAT = "MOBILE_MONEY_FLOAT";
@@ -83,30 +86,32 @@ export async function resolveMobileMoneyFloatAccountTx(
   });
 }
 
-export async function getMobileMoneyProviderAccountConfiguration(organizationId: string) {
-  const [organization, providers, mappings, financialAccounts, financeConfiguration] = await Promise.all([
-    prisma.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { country: true } }),
-    prisma.enterpriseRetailProvider.findMany({
+async function loadMobileMoneyProviderAccountConfiguration(database: Prisma.TransactionClient, organizationId: string, readSites: string[] | null, collectionSites: string[] | null, canManageMappings: boolean) {
+  const [organization, providers, mappings, financialAccounts, financeConfiguration, operationalWallets] = await Promise.all([
+    database.organization.findFirst({ where: { id: organizationId, deletedAt: null }, select: { country: true } }),
+    database.enterpriseRetailProvider.findMany({
       where: { organizationId, providerType: { in: ["MOBILE_MONEY", "BOTH"] }, isActive: true },
       orderBy: { label: "asc" },
     }),
-    prisma.enterpriseRetailProviderAccount.findMany({
+    database.enterpriseRetailProviderAccount.findMany({
       where: { organizationId, accountUse: MOBILE_MONEY_FLOAT, isActive: true },
       orderBy: [{ providerCode: "asc" }, { currencyCode: "asc" }],
     }),
-    prisma.enterpriseFinancialAccount.findMany({
-      where: { organizationId, accountType: "MOBILE_MONEY", status: "ACTIVE", archivedAt: null },
+    database.enterpriseFinancialAccount.findMany({
+      where: { organizationId, accountType: "MOBILE_MONEY", status: "ACTIVE", archivedAt: null, ...(readSites === null ? {} : { siteId: { in: readSites } }) },
       orderBy: [{ currencyCode: "asc" }, { name: "asc" }],
       select: { id: true, code: true, name: true, currencyCode: true, operationalBalance: true, ledgerAccountId: true },
     }),
-    prisma.enterpriseFinanceConfiguration.findUnique({
+    database.enterpriseFinanceConfiguration.findUnique({
       where: { organizationId },
       select: { functionalCurrencyCode: true, presentationCurrencyCode: true },
     }),
+    database.enterpriseFinancialAccount.findMany({ where: mobileMoneyOperationWalletWhere(organizationId, collectionSites), select: { id: true, currencyCode: true } }),
   ]);
   if (!organization) throw new EnterpriseRetailError("RETAIL_ORGANIZATION_NOT_FOUND", 404);
 
   const accountById = new Map(financialAccounts.map((account) => [account.id, account]));
+  const operationalCurrencyById = new Map(operationalWallets.map(account => [account.id, account.currencyCode]));
   const requiredCurrencies = requiredMobileMoneyCurrencies(organization.country);
   const availableCurrencies = Array.from(new Set([
     ...requiredCurrencies,
@@ -121,6 +126,7 @@ export async function getMobileMoneyProviderAccountConfiguration(organizationId:
       .map((mapping) => ({ ...mapping, financialAccount: accountById.get(mapping.financialAccountId) || null }))
       .filter((mapping) => Boolean(mapping.financialAccount));
     const mappedCurrencies = new Set(providerMappings.map((mapping) => mapping.currencyCode));
+    const operationCurrencies = [...new Set(mappings.filter(mapping => mapping.providerId === provider.id && operationalCurrencyById.get(mapping.financialAccountId) === mapping.currencyCode).map(mapping => mapping.currencyCode))].sort();
     const ready = requiredCurrencies.length
       ? requiredCurrencies.every((currency) => mappedCurrencies.has(currency))
       : mappedCurrencies.size >= 2;
@@ -130,6 +136,7 @@ export async function getMobileMoneyProviderAccountConfiguration(organizationId:
       label: provider.label,
       providerType: provider.providerType,
       accounts: providerMappings,
+      operationCurrencies,
       mappedCurrencyCount: mappedCurrencies.size,
       ready,
     };
@@ -141,8 +148,18 @@ export async function getMobileMoneyProviderAccountConfiguration(organizationId:
     minimumCurrencyCount: 2,
     availableCurrencies,
     financialAccounts,
+    canManageMappings,
     providers: mappedProviders,
   };
+}
+
+/** Internal callers use an organization projection; API callers must supply an actor. */
+export async function getMobileMoneyProviderAccountConfiguration(organizationId: string, userId?: string) {
+  if (userId === undefined) return loadMobileMoneyProviderAccountConfiguration(prisma, organizationId, null, null, true);
+  return prisma.$transaction(async tx => {
+    const scope = await mobileMoneyWalletConfigurationScope(tx, organizationId, userId);
+    return loadMobileMoneyProviderAccountConfiguration(tx, organizationId, scope.readSites, scope.collectionSites, scope.canManageMappings);
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 }
 
 export async function upsertMobileMoneyProviderAccount(
@@ -152,6 +169,7 @@ export async function upsertMobileMoneyProviderAccount(
 ) {
   const currencyCode = input.currencyCode.trim().toUpperCase();
   return prisma.$transaction(async (tx) => {
+    await assertMobileMoneyGlobalMappingAccess(tx, organizationId, actorUserId);
     const provider = await assertProviderTx(tx, organizationId, input.providerCode);
     const account = await assertMobileMoneyAccountTx(tx, organizationId, input.financialAccountId, currencyCode);
     const mapping = await tx.enterpriseRetailProviderAccount.upsert({
@@ -236,11 +254,13 @@ async function resolveFxPairTx(
 
 export async function previewMobileMoneyFxTransfer(
   organizationId: string,
+  actorUserId: string,
   input: { providerCode: string; sourceCurrencyCode: string; targetCurrencyCode: string; sourceAmount: number },
 ) {
   const occurredAt = new Date();
   return prisma.$transaction(async (tx) => {
     const resolved = await resolveFxPairTx(tx, organizationId, { ...input, occurredAt });
+    await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "VIEW_SALES", resolved.sourceResolved.account.id, resolved.targetResolved.account.id);
     return {
       providerCode: resolved.provider.providerCode,
       providerLabel: resolved.provider.label,
@@ -267,10 +287,14 @@ async function createMobileMoneyFxTransferTx(
   const existing = await tx.enterpriseMobileMoneyFxTransfer.findUnique({
     where: { organizationId_idempotencyKey: { organizationId, idempotencyKey: input.idempotencyKey } },
   });
-  if (existing) return { transfer: existing, idempotent: true };
+  if (existing) {
+    await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", existing.sourceFloatAccountId, existing.targetFloatAccountId);
+    return { transfer: existing, idempotent: true };
+  }
 
   const occurredAt = new Date();
   const resolved = await resolveFxPairTx(tx, organizationId, { ...input, occurredAt });
+  await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", resolved.sourceResolved.account.id, resolved.targetResolved.account.id);
   const lockIds = [resolved.sourceResolved.account.id, resolved.targetResolved.account.id].sort();
   await tx.$queryRaw(Prisma.sql`
     SELECT id FROM "EnterpriseFinancialAccount"
@@ -402,63 +426,77 @@ export async function createMobileMoneyFxTransferWithPosting(
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }
 
-export async function reverseMobileMoneyFxTransfer(
+async function reverseMobileMoneyFxTransferTx(
+  tx: Prisma.TransactionClient,
   organizationId: string,
   transferId: string,
   actorUserId: string,
   input: { revision: number; reason: string },
 ) {
-  return prisma.$transaction(async (tx) => {
-    await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyFxTransfer" WHERE id = ${transferId} AND "organizationId" = ${organizationId} FOR UPDATE`);
-    const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({ where: { id: transferId, organizationId } });
-    if (!transfer) throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_NOT_FOUND", 404);
-    if (transfer.status === "REVERSED") return transfer;
-    if (transfer.status !== "CONFIRMED" || transfer.revision !== input.revision) {
-      throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_CONFLICT", 409);
-    }
+  await tx.$executeRaw(Prisma.sql`SELECT id FROM "EnterpriseMobileMoneyFxTransfer" WHERE id = ${transferId} AND "organizationId" = ${organizationId} FOR UPDATE`);
+  const transfer = await tx.enterpriseMobileMoneyFxTransfer.findFirst({ where: { id: transferId, organizationId } });
+  if (!transfer) throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_NOT_FOUND", 404);
+  await assertMobileMoneyFxWalletAccess(tx, organizationId, actorUserId, "COLLECT_PAYMENT", transfer.sourceFloatAccountId, transfer.targetFloatAccountId);
+  if (transfer.status === "REVERSED") return transfer;
+  if (transfer.status !== "CONFIRMED" || transfer.revision !== input.revision) {
+    throw new EnterpriseRetailError("RETAIL_MOBILE_MONEY_FX_TRANSFER_CONFLICT", 409);
+  }
 
-    const lockIds = [transfer.sourceFloatAccountId, transfer.targetFloatAccountId].sort();
-    await tx.$queryRaw(Prisma.sql`
-      SELECT id FROM "EnterpriseFinancialAccount"
-      WHERE "organizationId" = ${organizationId} AND id IN (${Prisma.join(lockIds)})
-      ORDER BY id FOR UPDATE
-    `);
-    const [source, target] = await Promise.all([
-      assertMobileMoneyAccountTx(tx, organizationId, transfer.sourceFloatAccountId, transfer.sourceCurrencyCode),
-      assertMobileMoneyAccountTx(tx, organizationId, transfer.targetFloatAccountId, transfer.targetCurrencyCode),
-    ]);
-    if (target.operationalBalance.lessThan(transfer.targetAmount)) {
-      throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, { financialAccountId: target.id, currencyCode: target.currencyCode });
-    }
-    await tx.enterpriseFinancialAccount.update({ where: { id: source.id }, data: { operationalBalance: { increment: transfer.sourceAmount }, revision: { increment: 1 } } });
-    await tx.enterpriseFinancialAccount.update({ where: { id: target.id }, data: { operationalBalance: { decrement: transfer.targetAmount }, revision: { increment: 1 } } });
-    await tx.enterpriseTreasuryTransaction.createMany({
-      data: [
-        { organizationId, financialAccountId: source.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "INBOUND", currencyCode: source.currencyCode, amount: transfer.sourceAmount, transactionDate: new Date(), reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
-        { organizationId, financialAccountId: target.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "OUTBOUND", currencyCode: target.currencyCode, amount: transfer.targetAmount, transactionDate: new Date(), reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
-      ],
-    });
-    const reversed = await tx.enterpriseMobileMoneyFxTransfer.update({
-      where: { id: transfer.id },
-      data: {
-        status: "REVERSED",
-        reversalReason: input.reason,
-        reversedAt: new Date(),
-        reversedByUserId: actorUserId,
-        revision: { increment: 1 },
-      },
-    });
-    await publishFinanceEvent(tx, {
-      organizationId,
-      entityType: "EnterpriseMobileMoneyFxTransfer",
-      entityId: transfer.id,
-      eventType: "MOBILE_MONEY_FX_TRANSFER_REVERSED",
-      summary: `Reversal ${transfer.number}`,
-      actorUserId,
-      fromStatus: "CONFIRMED",
-      toStatus: "REVERSED",
-      metadataJson: { reason: input.reason.slice(0, 500) },
-    });
-    return reversed;
+  const lockIds = [transfer.sourceFloatAccountId, transfer.targetFloatAccountId].sort();
+  await tx.$queryRaw(Prisma.sql`
+    SELECT id FROM "EnterpriseFinancialAccount"
+    WHERE "organizationId" = ${organizationId} AND id IN (${Prisma.join(lockIds)})
+    ORDER BY id FOR UPDATE
+  `);
+  const [source, target] = await Promise.all([
+    assertMobileMoneyAccountTx(tx, organizationId, transfer.sourceFloatAccountId, transfer.sourceCurrencyCode),
+    assertMobileMoneyAccountTx(tx, organizationId, transfer.targetFloatAccountId, transfer.targetCurrencyCode),
+  ]);
+  if (target.operationalBalance.lessThan(transfer.targetAmount)) {
+    throw new EnterpriseRetailError("RETAIL_INSUFFICIENT_BALANCE", 409, { financialAccountId: target.id, currencyCode: target.currencyCode });
+  }
+  const reversedAt = new Date();
+  await tx.enterpriseFinancialAccount.update({ where: { id: source.id }, data: { operationalBalance: { increment: transfer.sourceAmount }, revision: { increment: 1 } } });
+  await tx.enterpriseFinancialAccount.update({ where: { id: target.id }, data: { operationalBalance: { decrement: transfer.targetAmount }, revision: { increment: 1 } } });
+  await tx.enterpriseTreasuryTransaction.createMany({
+    data: [
+      { organizationId, financialAccountId: source.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "INBOUND", currencyCode: source.currencyCode, amount: transfer.sourceAmount, transactionDate: reversedAt, reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
+      { organizationId, financialAccountId: target.id, transactionType: "MOBILE_MONEY_FX_REVERSAL", direction: "OUTBOUND", currencyCode: target.currencyCode, amount: transfer.targetAmount, transactionDate: reversedAt, reference: `${transfer.number}-REV`, createdByUserId: actorUserId },
+    ],
+  });
+  const reversed = await tx.enterpriseMobileMoneyFxTransfer.update({
+    where: { id: transfer.id },
+    data: {
+      status: "REVERSED",
+      reversalReason: input.reason,
+      reversedAt,
+      reversedByUserId: actorUserId,
+      revision: { increment: 1 },
+    },
+  });
+  await publishFinanceEvent(tx, {
+    organizationId,
+    entityType: "EnterpriseMobileMoneyFxTransfer",
+    entityId: transfer.id,
+    eventType: "MOBILE_MONEY_FX_TRANSFER_REVERSED",
+    summary: `Reversal ${transfer.number}`,
+    actorUserId,
+    fromStatus: "CONFIRMED",
+    toStatus: "REVERSED",
+    metadataJson: { reason: input.reason.slice(0, 500) },
+  });
+  return reversed;
+}
+
+export async function reverseMobileMoneyFxTransferWithPosting(
+  organizationId: string,
+  transferId: string,
+  actorUserId: string,
+  input: { revision: number; reason: string },
+) {
+  return prisma.$transaction(async tx => {
+    const transfer = await reverseMobileMoneyFxTransferTx(tx, organizationId, transferId, actorUserId, input);
+    const accounting = await finalizeMobileMoneyFxReversalAccountingTx(tx, organizationId, actorUserId, transfer.id);
+    return { transfer, accounting };
   }, { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 });
 }

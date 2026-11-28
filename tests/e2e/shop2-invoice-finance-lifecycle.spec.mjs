@@ -1419,8 +1419,44 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
       data: { settingsJson: { ...activeSettings, inventoryPolicy: transferPolicy } },
     });
     const transferPath=base+"/stock-transfers";
-    const transit=await post(context.owner,transferPath,{sourceWarehouseId:duplicateWarehouse.id,destinationWarehouseId:spareWarehouse.id,approverUserId:fixture.settler.id,lines:[{inventoryItemId:batchInventory.id,stockLotId:duplicateLot.id,quantity:1}]});
+    const carton = await prisma.enterpriseUnitOfMeasure.create({ data: {
+      organizationId, code: batchKey + "-BOX", name: "Transfer box E2E", decimalScale: 3, createdByUserId: fixture.owner.id,
+    } });
+    const unitConversions = base + "/catalog/unit-conversions";
+    const conversionInput = { catalogItemId: batchProduct.id, sourceUnitId: carton.id };
+    const configured = await post(context.owner, unitConversions, { ...conversionInput, factor: "8", expectedVersion: 0 });
+    expect(configured.status, JSON.stringify(configured.body)).toBe(201);
+    const lotLookup = await context.owner.request.get(`${transferPath}/lots?warehouseId=${duplicateWarehouse.id}&inventoryItemId=${batchInventory.id}&includeUnitConversions=1`);
+    expect(lotLookup.status()).toBe(200);
+    expect((await lotLookup.json()).conversions).toEqual([expect.objectContaining({ sourceUnitId: carton.id, version: 1, factor: "8" })]);
+    const transferData = { sourceWarehouseId: duplicateWarehouse.id, destinationWarehouseId: spareWarehouse.id, approverUserId: fixture.settler.id };
+    const transferLine = { inventoryItemId: batchInventory.id, stockLotId: duplicateLot.id, quantity: "0.125", sourceUnitId: carton.id };
+    const mismatch = await post(context.owner, transferPath, { ...transferData, lines: [{ ...transferLine, expectedConversionVersion: 2 }] });
+    expect(mismatch.status, JSON.stringify(mismatch.body)).toBe(409);
+    expect(await prisma.enterpriseStockTransfer.count({ where: { organizationId, sourceWarehouseId: duplicateWarehouse.id } })).toBe(0);
+    const transferPage = await context.owner.newPage();
+    let transit;
+    try {
+      await transferPage.goto("/enterprise-modules/INVENTORY_LOGISTICS");
+      await transferPage.getByRole("button", { name: /^(Nouveau transfert|New transfer)$/ }).click();
+      const form = transferPage.getByRole("dialog", { name: /^(Nouveau transfert de stock|New inventory transfer)$/ });
+      await form.locator('select[name="sourceWarehouseId"]').selectOption(duplicateWarehouse.id);
+      await form.locator('select[name="destinationWarehouseId"]').selectOption(spareWarehouse.id);
+      await form.locator('select[name="approverUserId"]').selectOption(fixture.settler.id);
+      await form.locator('select[name="inventoryItemId"]').selectOption(batchInventory.id);
+      await form.locator('select[name="stockLotId"]').selectOption(duplicateLot.id);
+      await form.getByRole("combobox", { name: /^(Unité saisie|Unit entered)$/ }).selectOption(carton.id);
+      await expect(form.locator('input[name="quantity"]')).toHaveAttribute("step", "0.001");
+      await form.locator('input[name="quantity"]').fill("0.125");
+      const submitted = transferPage.waitForResponse(response => response.url().endsWith(transferPath) && response.request().method() === "POST");
+      await form.getByRole("button", { name: /^(Soumettre le transfert|Submit transfer)$/ }).click();
+      const response = await submitted;
+      transit = { status: response.status(), body: await response.json() };
+    } finally {
+      await transferPage.close();
+    }
     expect(transit.status,JSON.stringify(transit.body)).toBe(201);
+    expect(transit.body.transfer.lines[0]).toMatchObject({ quantity: "1", unitConversionJson: { sourceQuantity: "0.125", stockQuantity: "1", version: 1, factor: "8" } });
     const dispatch=await post(context.settler,transferPath+"/"+transit.body.transfer.id+"/decision",{decision:"APPROVE",revision:transit.body.transfer.revision});
     expect(dispatch.status,JSON.stringify(dispatch.body)).toBe(200);
     expect(dispatch.body.transfer.status).toBe("IN_TRANSIT");
@@ -1441,9 +1477,12 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     expect(recreate.status,JSON.stringify(recreate.body)).toBe(409);
     await expect(prisma.enterpriseStockLot.create({data:{organizationId,inventoryItemId:batchInventory.id,warehouseId:spareWarehouse.id,lotNumber:duplicateLot.lotNumber,expiryDate:duplicateLot.expiryDate,createdByUserId:fixture.owner.id}})).rejects.toThrow();
     const receiptPath=transferPath+"/"+transit.body.transfer.id+"/receive";
+    const revised = await post(context.owner, unitConversions, { ...conversionInput, factor: "16", expectedVersion: 1 });
+    expect(revised.status, JSON.stringify(revised.body)).toBe(201);
     const received=await post(context.owner,receiptPath,{revision:dispatch.body.transfer.revision,comment:"Recalled batch received into physically segregated zone"});
     expect(received.status,JSON.stringify(received.body)).toBe(200);
     expect(received.body.transfer.status).toBe("COMPLETED");
+    expect(received.body.transfer.lines[0].unitConversionJson).toEqual(transit.body.transfer.lines[0].unitConversionJson);
     const receivedLot=await prisma.enterpriseStockLot.findFirstOrThrow({where:{organizationId,inventoryItemId:batchInventory.id,warehouseId:spareWarehouse.id,lotNumber:duplicateLot.lotNumber}});
     expect(receivedLot.status).toBe("QUARANTINED");
     expect(receivedLot.recallReference).toBe(recall.body.recallReference);
@@ -1751,8 +1790,11 @@ test("#1042 real Finance settlement and five-actor credit, refund and inventory 
     const tooMuch=await context.owner.request.get(returnCheck+"&quantity=5");
     expect(tooMuch.status(),await tooMuch.text()).toBe(409);
     expect((await tooMuch.json()).error).toBe("SUPPLIER_RETURN_QUANTITY_INVALID");
-    const invalidPrecision=await context.owner.request.get(returnCheck+"&quantity=1.0001");
+    const invalidPrecision=await context.owner.request.get(returnCheck+"&quantity=1.0000001");
     expect(invalidPrecision.status()).toBe(400);
+    const microPrecision=await context.owner.request.get(returnCheck+"&quantity=1.000001");
+    expect(microPrecision.status(),await microPrecision.text()).toBe(409);
+    expect((await microPrecision.json()).error).toBe("SUPPLIER_RETURN_INVOICE_REQUIRED");
     const missingInvoice=await context.owner.request.get(returnCheck+"&quantity=2");
     expect(missingInvoice.status(),await missingInvoice.text()).toBe(409);
     expect((await missingInvoice.json()).error).toBe("SUPPLIER_RETURN_INVOICE_REQUIRED");

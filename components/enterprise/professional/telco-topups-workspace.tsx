@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode, type SelectHTMLAttributes } from "react";
 import { CheckCircle2, RadioTower, RefreshCw, RotateCcw, Settings2 } from "lucide-react";
 import { CommercialDesign2Controls, CommercialDesign2Connections } from "@/components/enterprise/professional/commercial-design2-controls";
-import type { FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, formatAnalyticsAmount, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { ProfessionalError, ProfessionalLoading, ProfessionalSearch, useProfessionalCollection } from "@/components/enterprise/professional/professional-erp-ui";
 import { useAppLocale } from "@/components/i18n/locale-provider";
 import { formatEnterpriseDate } from "@/components/enterprise/core-v2/erp-v2-ui";
@@ -40,6 +40,8 @@ import {
   customerFacingStatusLabel,
 } from "@/lib/customer-facing-language";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import type { MonetaryScopes } from "@/lib/enterprise/common/analytics";
+import { inventoryQuantityExportValue as exactDecimalExportValue } from "@/lib/enterprise/inventory/quantity-display";
 import { translateRetailWorkspace } from "@/lib/i18n";
 
 type TelcoCurrencyAccount = {
@@ -700,11 +702,12 @@ function TelcoHistory({
   }, [page, search, recordStatus, dateFrom, dateTo]);
   // History and exported rows come from the same authenticated, tenant-scoped
   // Retail endpoint. Dashboard.recent is only a small operational sample.
-  const collection = useProfessionalCollection<TelcoTopup>({
+  const collection = useProfessionalCollection<TelcoTopup, MonetaryScopes>({
     endpoint: `/api/enterprise/${organizationId}/retail/telco-topups`,
     params, refreshKey,
   });
   const items = collection.items;
+  const ready = !collection.loading && !collection.error;
   const exportFilters = { search, status: recordStatus, dateFrom, dateTo };
   const exportColumns: FinanceExportColumn[] = [
     { key: "number", labelFr: "Référence", labelEn: "Reference", get: row => String(row.number || "") },
@@ -712,9 +715,9 @@ function TelcoHistory({
     { key: "offer", labelFr: "Offre ou forfait", labelEn: "Offer / bundle", get: row => String(row.offerLabel || "") },
     { key: "phone", labelFr: "Téléphone masqué", labelEn: "Masked phone", get: row => String(row.destinationPhoneMasked || "") },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: row => customerFacingStatusLabel(String(row.status || ""), locale) },
-    { key: "sale", labelFr: "Prix de vente", labelEn: "Sale amount", get: row => Number(row.saleAmount || 0) },
-    { key: "cost", labelFr: "Coût opérateur", labelEn: "Operator cost", get: row => Number(row.operatorCost || 0) },
-    { key: "margin", labelFr: "Marge", labelEn: "Margin", get: row => Number(row.marginAmount || 0) },
+    { key: "sale", labelFr: "Prix de vente", labelEn: "Sale amount", get: row => exactDecimalExportValue(String(row.saleAmount ?? "")) },
+    { key: "cost", labelFr: "Coût opérateur", labelEn: "Operator cost", get: row => exactDecimalExportValue(String(row.operatorCost ?? "")) },
+    { key: "margin", labelFr: "Marge", labelEn: "Margin", get: row => exactDecimalExportValue(String(row.marginAmount ?? "")) },
     { key: "currency", labelFr: "Devise", labelEn: "Currency", get: row => String(row.currencyCode || "") },
     { key: "operatorReference", labelFr: "Référence opérateur", labelEn: "Operator reference", get: row => String(row.externalReference || "") },
     { key: "date", labelFr: "Date de l'opération", labelEn: "Operation date", get: row => String(row.occurredAt || "").slice(0, 19) },
@@ -755,7 +758,7 @@ function TelcoHistory({
       ]} />
       <section data-telco-history-design2 className="grid min-w-0 gap-3 rounded-2xl border border-dtsc-border bg-dtsc-surface p-3 shadow-sm sm:p-4">
         <h2 className="border-l-[3px] border-cyan-500 pl-3 text-lg font-black text-dtsc-ink">{copy.history}
-          <span className="ml-2 rounded-full bg-cyan-500/10 px-2 py-1 text-xs text-dtsc-blue">{collection.pagination.total}</span>
+          {ready ? <span className="ml-2 rounded-full bg-cyan-500/10 px-2 py-1 text-xs text-dtsc-blue">{collection.pagination.total}</span> : null}
         </h2>
         <ProfessionalSearch value={search} onChange={(value) => { setSearch(value); setPage(1); }}
           placeholder={locale === "en" ? "Reference, offer, provider or phone…" : "Référence, forfait, opérateur ou téléphone…"} />
@@ -764,8 +767,10 @@ function TelcoHistory({
           from={dateFrom} to={dateTo} onDateChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }}
           status={recordStatus} onStatusChange={(next) => { setRecordStatus(next); setPage(1); }}
           choices={[{ id: "", label: locale === "en" ? "All statuses" : "Tous les statuts" }, ...["SUCCESS", "FAILED", "REVERSED"].map(id => ({ id, label: customerFacingStatusLabel(id, locale) }))]}
-          noteFr="Historique complet, filtré par le serveur avant pagination. Montants par devise d’origine ; aucun mélange ni conversion implicite."
-          noteEn="Full server-filtered history before pagination. Amounts keep their original currencies; no implicit conversion." />
+          disabledExport={!ready}
+          noteFr="Montants des opérations par devise d’origine et statut. Les ventes réalisées figurent sous le statut de réussite."
+          noteEn="Operation amounts by original currency and status. Completed sales are shown under the successful status." />
+        {ready ? <FinanceAmountScopes totals={collection.extra} locale={locale} /> : null}
         {collection.error ? <ProfessionalError message={collection.error} /> : collection.loading ? <ProfessionalLoading /> : items.length ? (
           <BusinessList ariaLabel={copy.history}>
             {items.map((item: TelcoTopup) => (
@@ -773,8 +778,8 @@ function TelcoHistory({
                 key={item.id}
                 title={`${item.number} · ${providerLabel(dashboard, item.providerCode)}`}
                 status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
-                meta={`${item.offerLabel} · ${moneyValue(item.saleAmount, item.currencyCode, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
-                description={`${item.destinationPhoneMasked || "—"} · ${copy.margin} ${moneyValue(item.marginAmount, item.currencyCode, locale)} · ${translateRetailWorkspace(locale, "operatorOperatorReference")}: ${item.externalReference || "—"}`}
+                meta={`${item.offerLabel} · ${formatAnalyticsAmount({ amount: String(item.saleAmount), currencyCode: item.currencyCode }, locale)} · ${formatEnterpriseDate(item.occurredAt, locale)}`}
+                description={`${item.destinationPhoneMasked || "—"} · ${copy.margin} ${formatAnalyticsAmount({ amount: String(item.marginAmount), currencyCode: item.currencyCode }, locale)} · ${translateRetailWorkspace(locale, "operatorOperatorReference")}: ${item.externalReference || "—"}`}
                 actions={dashboard.access.canManage && item.status === "SUCCESS" ? <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => { setReversal({ id: item.id, revision: item.revision, number: item.number }); setReason(""); setReasonError(""); }}><RotateCcw className="h-4 w-4" />{copy.reverse}</Button> : undefined}
               />
             ))}

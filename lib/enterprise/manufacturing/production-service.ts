@@ -1,4 +1,5 @@
 import { Prisma } from "@prisma/client";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { resolveEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import type { z } from "zod";
 import { assertEnterpriseApprovalCandidate, assertEnterpriseApprovalDecision } from "@/lib/enterprise/approval-assignment";
@@ -189,7 +190,8 @@ export async function createProductionOrder(organizationId: string, actorUserId:
     for (const line of bom.lines) {
       const inventoryItem = await requireManufacturingInventoryItem(tx, organizationId, line.catalogItemId);
       const baseQuantity = line.quantity.div(bom.outputQuantity).mul(input.plannedQuantity);
-      const requiredQuantity = baseQuantity.mul(new Prisma.Decimal(1).add(line.scrapRate.div(100))).toDecimalPlaces(3);
+      const requiredQuantity = baseQuantity.mul(new Prisma.Decimal(1).add(line.scrapRate.div(100)));
+      requireInventoryQuantity(requiredQuantity, inventoryItem.catalogItem.unitOfMeasure.decimalScale, { positive: true });
       requirementDrafts.push({
         organizationId,
         bomLineId: line.id,
@@ -352,7 +354,7 @@ export async function consumeProductionMaterial(organizationId: string, orderId:
     if (order.status !== "IN_PROGRESS") throw new ManufacturingDomainError("La consommation matière exige un ordre en cours.", 409, "PRODUCTION_ORDER_NOT_IN_PROGRESS");
     const requirement = await tx.enterpriseProductionMaterialRequirement.findFirst({ where: { id: input.requirementId, organizationId, productionOrderId: order.id } });
     if (!requirement) throw new ManufacturingDomainError("Besoin matière introuvable pour cet ordre.", 404, "PRODUCTION_REQUIREMENT_NOT_FOUND");
-    const nextConsumed = requirement.consumedQuantity.add(input.quantity).toDecimalPlaces(3);
+    const nextConsumed = requirement.consumedQuantity.add(input.quantity);
     if (nextConsumed.gt(requirement.requiredQuantity)) throw new ManufacturingDomainError("La consommation dépasse le besoin matière calculé.", 409, "PRODUCTION_CONSUMPTION_EXCEEDS_REQUIREMENT");
     const refs = await validateExecutionReferences(tx, organizationId, order, input);
     const stock = await applyStockMovementTx(tx, organizationId, actorUserId, {
@@ -404,7 +406,7 @@ export async function receiveProductionOutput(organizationId: string, orderId: s
     const order = await requireProductionOrder(tx, organizationId, orderId);
     if (order.status !== "IN_PROGRESS") throw new ManufacturingDomainError("La réception de produit fini exige un ordre en cours.", 409, "PRODUCTION_ORDER_NOT_IN_PROGRESS");
     const configuration = await tx.enterpriseManufacturingConfiguration.findUnique({ where: { organizationId } });
-    const nextProduced = order.producedQuantity.add(input.quantity).toDecimalPlaces(3);
+    const nextProduced = order.producedQuantity.add(input.quantity);
     if (configuration?.allowOverproduction !== true && nextProduced.gt(order.plannedQuantity)) throw new ManufacturingDomainError("La quantité reçue dépasserait la quantité planifiée. Activez explicitement la surproduction dans la configuration pour l’autoriser.", 409, "PRODUCTION_OVERPRODUCTION_NOT_ALLOWED");
     const outputInventoryItem = await requireManufacturingInventoryItem(tx, organizationId, order.outputCatalogItemId);
     const refs = await validateExecutionReferences(tx, organizationId, order, input);
@@ -557,7 +559,7 @@ export async function createProductionScrap(organizationId: string, actorUserId:
       createdByUserId: actorUserId,
     } });
     if (!requirement) {
-      await tx.enterpriseProductionOrder.update({ where: { id: order.id }, data: { scrappedQuantity: order.scrappedQuantity.add(input.quantity).toDecimalPlaces(3), revision: { increment: 1 } } });
+      await tx.enterpriseProductionOrder.update({ where: { id: order.id }, data: { scrappedQuantity: order.scrappedQuantity.add(input.quantity), revision: { increment: 1 } } });
     }
     await addEnterpriseOperationalEvent(tx, { organizationId, entityType: "EnterpriseProductionOrder", entityId: order.id, eventType: "PRODUCTION_SCRAP_RECORDED", summary: `Rebut enregistré sur ${order.reference}.`, actorUserId, metadata: { scrapId: scrap.id, quantity: String(input.quantity), reasonCode: input.reasonCode, affectsInventory: input.affectsInventory, stockMovementId } });
     return { scrap, idempotent: false };

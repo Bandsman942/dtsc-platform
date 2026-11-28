@@ -12,6 +12,7 @@ import { Input } from "@/components/ui/input";
 import { ContextualUserGuide } from "@/components/user-guides/contextual-user-guide";
 import { ModuleSection } from "@/components/workspace/module-workspace";
 import { getAccountingWorkspaceCopy } from "@/lib/enterprise/accounting/accounting-workspace-copy";
+import type { SyscohadaMerchandiseComparison } from "@/lib/enterprise/accounting/chart-version-migration-service";
 import { translateEnterpriseFinance, type EnterpriseFinanceKey } from "@/lib/i18n";
 import { getAccountingOnboardingGuide } from "@/lib/user-guides/accounting-onboarding-guide";
 
@@ -195,6 +196,9 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
                   {canManage && selectedChart.templateCode && selectedChart.status !== "ACTIVE" ? <Button disabled={saving || blocked} onClick={() => void mutate({ action: "ACTIVATE_CHART", chartId: selectedChart.id, revision: selectedChart.revision }, "chartActivated")}>{copy.activateChart}</Button> : null}
                   <Button asChild variant="outline"><Link href="/enterprise-modules/FINANCE_ACCOUNTING?tab=charts">{copy.openDetails}</Link></Button>
                 </div>
+                {selectedChart.templateCode === payload?.defaultTemplateReference ? (
+                  <SyscohadaComparison key={selectedChart.id} organizationId={organizationId} chartId={selectedChart.id} locale={financeLocale} />
+                ) : null}
               </div>
             )}
 
@@ -257,6 +261,54 @@ export function EnterpriseAccountingOnboardingPanel({ organizationId, locale, ca
       </Dialog>
     </div>
   );
+}
+
+function SyscohadaComparison({ organizationId, chartId, locale }: { organizationId: string; chartId: string; locale: FinanceLocale }) {
+  const [comparison, setComparison] = useState<SyscohadaMerchandiseComparison | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const t = (key: EnterpriseFinanceKey) => translateEnterpriseFinance(locale, key);
+
+  async function showComparison() {
+    setLoading(true);
+    setError("");
+    setComparison(null);
+    try {
+      const params = new URLSearchParams({ chartId, compareSyscohada: "1" });
+      const body = await jsonRequest(`/api/enterprise/${organizationId}/accounting-setup?${params}`) as unknown as { comparison: SyscohadaMerchandiseComparison };
+      setComparison(body.comparison);
+    } catch (requestError) {
+      setError(safeFinanceError(requestError, t("syscohadaComparisonFailed"), locale));
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  return <section className="mt-4 grid min-w-0 gap-3 border-t border-dtsc-border pt-4">
+    <Button type="button" variant="outline" className="w-fit max-w-full whitespace-normal" disabled={loading} onClick={() => void showComparison()}>
+      {loading ? t("syscohadaComparisonLoading") : t("syscohadaCompareMerchandise")}
+    </Button>
+    {error ? <p className="text-sm text-dtsc-ink" role="alert">{error}</p> : null}
+    {comparison ? <div role="region" aria-label={t("syscohadaComparisonTitle")} className="grid min-w-0 gap-3 text-sm">
+      <h4 className="font-bold text-dtsc-ink">{t("syscohadaComparisonTitle")}</h4>
+      <p className="text-dtsc-muted">{t("syscohadaComparisonScope")}</p>
+      <dl className="grid gap-2">
+        <div>
+          <dt className="font-semibold text-dtsc-ink">{t("syscohadaProposedAccounts")}</dt>
+          <dd>{comparison.diff.accounts.added.map(account => `${account.code} · ${t("syscohadaMerchandiseVariation")}`).join(", ")}</dd>
+        </div>
+        <div>
+          <dt className="font-semibold text-dtsc-ink">{t("syscohadaJournalHistory")}</dt>
+          <dd>{comparison.journalHistoryCount.toLocaleString(locale)}</dd>
+        </div>
+        {comparison.accountConflicts.length ? <div>
+          <dt className="font-semibold text-dtsc-ink">{t("syscohadaAccountConflicts")}</dt>
+          <dd className="break-words">{comparison.accountConflicts.map(account => `${account.code} · ${locale === "en" ? account.nameEn : account.nameFr}`).join(", ")}</dd>
+        </div> : null}
+      </dl>
+      <a className="w-fit text-dtsc-blue underline" href={comparison.sourceUrl} target="_blank" rel="noreferrer">{t("syscohadaOfficialSource")}</a>
+    </div> : null}
+  </section>;
 }
 
 function DiagnosticRow({ diagnostic, en, copy }: { diagnostic: Diagnostic; en: boolean; copy: ReturnType<typeof getAccountingWorkspaceCopy> }) {

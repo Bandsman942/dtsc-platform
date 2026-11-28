@@ -2,6 +2,9 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeListParams } from "@/lib/enterprise/accounting/http";
+import { readTreasuryBalanceAt } from "@/lib/enterprise/accounting/treasury-balance-at";
+import { directionalAmountTotals, directionalPageTotals } from "@/lib/enterprise/common/analytics";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -25,7 +28,8 @@ export async function GET(req: Request, { params }: Params) {
   const direction = url.searchParams.get("direction")?.trim() || undefined;
   const currencyCode = url.searchParams.get("currencyCode")?.trim().toUpperCase() || undefined;
   const from = validDate(url.searchParams.get("from"));
-  const to = validDate(url.searchParams.get("to"));
+  const closingDate = url.searchParams.get("to") || "";
+  const to = validDate(closingDate);
   if (to) to.setHours(23, 59, 59, 999);
 
   const where: Prisma.EnterpriseTreasuryTransactionWhereInput = {
@@ -39,34 +43,52 @@ export async function GET(req: Request, { params }: Params) {
     ...(search ? { reference: { contains: search, mode: "insensitive" } } : {}),
   };
 
-  const [rawItems, total] = await Promise.all([
-    prisma.enterpriseTreasuryTransaction.findMany({
-      where,
-      orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }],
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        financialAccount: { select: { id: true, code: true, name: true, accountType: true, currencyCode: true } },
-        payment: { select: { id: true, number: true, status: true, paymentType: true } },
-        fundingOperation: { select: { id: true, number: true, status: true, fundingType: true } },
-      },
-    }),
-    prisma.enterpriseTreasuryTransaction.count({ where }),
-  ]);
-
-  const transferIds = [...new Set(rawItems.map((item) => item.transferId).filter((id): id is string => Boolean(id)))];
-  const transfers = transferIds.length
-    ? await prisma.enterpriseAccountTransfer.findMany({
-        where: { organizationId, id: { in: transferIds } },
-        select: { id: true, number: true, status: true, sourceFinancialAccountId: true, targetFinancialAccountId: true, exchangeRate: true },
-      })
-    : [];
-  const transferById = new Map(transfers.map((transfer) => [transfer.id, transfer]));
-  const items = rawItems.map((item) => ({
-    ...item,
-    transfer: item.transferId ? transferById.get(item.transferId) || null : null,
-  }));
+  const result = await prisma.$transaction(async (tx) => {
+    const aggregateByDirection = (scope: Prisma.EnterpriseTreasuryTransactionWhereInput) => tx.enterpriseTreasuryTransaction.groupBy({
+      by: ["currencyCode", "direction", "status"],
+      where: scope,
+      _sum: { amount: true },
+    });
+    const general = aggregateByDirection({ organizationId });
+    const [rawItems, total, filteredGroups, generalGroups, balanceAt] = await Promise.all([
+      tx.enterpriseTreasuryTransaction.findMany({
+        where,
+        orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          financialAccount: { select: { id: true, code: true, name: true, accountType: true, currencyCode: true } },
+          payment: { select: { id: true, number: true, status: true, paymentType: true } },
+          fundingOperation: { select: { id: true, number: true, status: true, fundingType: true } },
+        },
+      }),
+      tx.enterpriseTreasuryTransaction.count({ where }),
+      Object.keys(where).length === 1 ? general : aggregateByDirection(where),
+      general,
+      accountId && isValidEnterpriseActivityCivilDate(closingDate)
+        ? readTreasuryBalanceAt(tx, organizationId, accountId, closingDate, new Date(startedAt))
+        : null,
+    ]);
+    const transferIds = [...new Set(rawItems.map((item) => item.transferId).filter((id): id is string => Boolean(id)))];
+    const transfers = transferIds.length ? await tx.enterpriseAccountTransfer.findMany({
+      where: { organizationId, id: { in: transferIds } },
+      select: { id: true, number: true, status: true, sourceFinancialAccountId: true, targetFinancialAccountId: true, exchangeRate: true },
+    }) : [];
+    const transferById = new Map(transfers.map((transfer) => [transfer.id, transfer]));
+    const items = rawItems.map((item) => ({
+      ...item,
+      transfer: item.transferId ? transferById.get(item.transferId) || null : null,
+    }));
+    return {
+      items,
+      pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+      ...(balanceAt ? { metrics: { treasuryBalanceAt: balanceAt } } : {}),
+      filteredTotals: directionalAmountTotals(filteredGroups.map((group) => ({ ...group, amount: group._sum.amount }))),
+      generalTotals: directionalAmountTotals(generalGroups.map((group) => ({ ...group, amount: group._sum.amount }))),
+      pageTotals: directionalPageTotals(rawItems),
+    };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "treasury-history" } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
 }

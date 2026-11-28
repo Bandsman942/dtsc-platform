@@ -10,7 +10,7 @@ import { AccountingCompactTable, type AccountingCompactColumn } from "@/componen
 import { AccountingJournalWorkbench } from "@/components/enterprise/professional/accounting-journal-workbench";
 import { formatAccountingNarrative } from "@/lib/enterprise/accounting/narrative-i18n";
 import { AccountingRecordDetail, type AccountingRecordDetailKind } from "@/components/enterprise/professional/accounting-record-detail";
-import { FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceDateFilter, FinanceExportControls, FinanceFilteredTotals, formatAnalyticsAmount, type FinanceFilteredTotal, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { FinanceTemplateImportControls } from "@/components/enterprise/professional/finance-template-import-controls";
 import { AssignedApprovalSubmitPanel } from "@/components/enterprise/professional/assigned-approval-submit-panel";
 import { EnterpriseAccountingOnboardingPanel } from "@/components/enterprise/professional/enterprise-accounting-onboarding-panel";
@@ -77,6 +77,7 @@ type LedgerRow = AnyRow & {
     fiscalPeriod?: { code?: string };
   };
   description?: string | null;
+  displayDescription?: string | null;
   debit?: string | number;
   credit?: string | number;
   transactionCurrencyCode?: string | null;
@@ -94,7 +95,7 @@ type TrialRow = AnyRow & {
   closingBalance?: string | number;
 };
 type OverviewPayload = { metrics?: Record<string, number>; charts?: Record<string, unknown>; range?: string };
-type ListPayload<T = AnyRow> = { items?: T[]; pagination?: Pagination; functionalCurrencyCode?: string | null; period?: { dateFrom?: string | null; dateTo?: string | null } };
+type ListPayload<T = AnyRow> = { filteredTotals?: FinanceFilteredTotal[]; items?: T[]; pagination?: Pagination; functionalCurrencyCode?: string | null; period?: { dateFrom?: string | null; dateTo?: string | null } };
 type EntryTracePayload = {
   entry?: JournalEntry & { lines?: LedgerRow[]; sourceModule?: string | null; sourceEntityId?: string | null };
   sourceLink?: { labelFr: string; labelEn: string; href: string; moduleCode: string } | null;
@@ -108,6 +109,10 @@ const JOURNAL_TYPES = ["GENERAL", "SALES", "PURCHASES", "BANK", "CASH", "MOBILE_
 const FULLSCREEN_FORM_CLASS = "h-[100dvh] w-full max-w-none rounded-none sm:h-[94dvh] sm:w-auto sm:max-w-3xl sm:rounded-3xl";
 
 function rawText(value: unknown) { return value === null || value === undefined ? "" : String(value); }
+function ledgerAmount(value: unknown, currencyCode: string | null | undefined, locale: FinanceLocale) {
+  if (value == null) return "—";
+  return currencyCode ? formatAnalyticsAmount({ amount: String(value), currencyCode }, locale) : String(value);
+}
 function rowText(row: AnyRow, key: string) { return rawText(row[key]); }
 function rowObject(row: AnyRow | null | undefined, key: string) {
   const value = row?.[key];
@@ -143,6 +148,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
   const [reviewView, setReviewView] = useState<ReviewView>("ledger");
   const [configureView, setConfigureView] = useState<ConfigureView>("setup");
   const [rows, setRows] = useState<AnyRow[]>([]);
+  const [filteredTotals, setFilteredTotals] = useState<FinanceFilteredTotal[]>([]);
   const [entries, setEntries] = useState<JournalEntry[]>([]);
   const [pagination, setPagination] = useState<Pagination>(EMPTY_PAGINATION);
   const [overview, setOverview] = useState<OverviewPayload>({});
@@ -200,6 +206,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     const controller = new AbortController();
     async function load() {
       setLoading(true);
+      setFilteredTotals([]);
       setErrorMessage("");
       try {
         if (space === "home") {
@@ -218,7 +225,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
           const response = await fetch(`/api/enterprise/${organizationId}/journal-entries?${query.toString()}`, { cache: "no-store", signal: controller.signal });
           const body = await response.json().catch(() => ({})) as ListPayload<JournalEntry> & { message?: string; error?: string };
           if (!response.ok) throw new Error(body.message || body.error || "JOURNAL_ENTRIES_FAILED");
-          if (!cancelled) { setEntries(body.items || []); setRows([]); setPagination(body.pagination || EMPTY_PAGINATION); }
+          if (!cancelled) { setEntries(body.items || []); setRows([]); setPagination(body.pagination || EMPTY_PAGINATION); setFilteredTotals(body.filteredTotals || []); }
           return;
         }
         if (space === "review") {
@@ -230,7 +237,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
           const response = await fetch(`/api/enterprise/${organizationId}/accounting-query?${query.toString()}`, { cache: "no-store", signal: controller.signal });
           const body = await response.json().catch(() => ({})) as ListPayload & { message?: string; error?: string };
           if (!response.ok) throw new Error(body.message || body.error || "ACCOUNTING_QUERY_FAILED");
-          if (!cancelled) { setRows(body.items || []); setEntries([]); setPagination(body.pagination || EMPTY_PAGINATION); }
+          if (!cancelled) { setRows(body.items || []); setEntries([]); setPagination(body.pagination || EMPTY_PAGINATION); setFilteredTotals(body.filteredTotals || []); }
           return;
         }
         if (configureView === "setup") { setRows([]); setPagination(EMPTY_PAGINATION); return; }
@@ -439,19 +446,19 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     { key: "date", label: en ? "Date" : "Date", render: (row) => financeDate(row.journalEntry?.accountingDate || "", locale) },
     { key: "entry", label: en ? "Entry" : "Écriture", render: (row) => <span className="font-black text-dtsc-blue">{row.journalEntry?.number || "—"}</span> },
     { key: "account", label: en ? "Account" : "Compte", render: (row) => <span className="font-bold">{row.ledgerAccount?.code || "—"} · {locale === "en" ? row.ledgerAccount?.nameEn || row.ledgerAccount?.nameFr : row.ledgerAccount?.nameFr || row.ledgerAccount?.nameEn}</span> },
-    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => formatAccountingNarrative(row.description || row.journalEntry?.description, locale) || "—" },
+    { key: "description", label: en ? "Description" : "Libellé", cellClassName: "max-w-[24rem] truncate", render: (row) => formatAccountingNarrative(row.displayDescription || row.description || row.journalEntry?.description, locale) || "—" },
     { key: "journal", label: en ? "Journal" : "Journal", render: (row) => row.journalEntry?.journal?.code || "—" },
     { key: "period", label: en ? "Period" : "Période", render: (row) => row.journalEntry?.fiscalPeriod?.code || "—" },
-    { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => financeMoney(row.debit || 0, row.journalEntry?.functionalCurrencyCode || "", locale) },
-    { key: "credit", label: en ? "Credit" : "Crédit", numeric: true, render: (row) => financeMoney(row.credit || 0, row.journalEntry?.functionalCurrencyCode || "", locale) },
+    { key: "debit", label: en ? "Debit" : "Débit", numeric: true, render: (row) => ledgerAmount(row.debit, row.journalEntry?.functionalCurrencyCode || entryTrace?.entry?.functionalCurrencyCode, locale) },
+    { key: "credit", label: en ? "Credit" : "Crédit", numeric: true, render: (row) => ledgerAmount(row.credit, row.journalEntry?.functionalCurrencyCode || entryTrace?.entry?.functionalCurrencyCode, locale) },
   ];
 
   const trialColumns: AccountingCompactColumn<TrialRow>[] = [
     { key: "account", label: en ? "Account" : "Compte", render: (row) => <span className="font-black">{row.code || "—"} · {locale === "en" ? row.nameEn || row.nameFr : row.nameFr || row.nameEn}</span> },
-    { key: "opening", label: en ? "Opening" : "Ouverture", numeric: true, render: (row) => financeMoney(row.openingBalance || 0, row.functionalCurrencyCode || "", locale) },
-    { key: "debit", label: en ? "Period debit" : "Débit période", numeric: true, render: (row) => financeMoney(row.periodDebit || 0, row.functionalCurrencyCode || "", locale) },
-    { key: "credit", label: en ? "Period credit" : "Crédit période", numeric: true, render: (row) => financeMoney(row.periodCredit || 0, row.functionalCurrencyCode || "", locale) },
-    { key: "closing", label: en ? "Closing" : "Clôture", numeric: true, render: (row) => <strong>{financeMoney(row.closingBalance || 0, row.functionalCurrencyCode || "", locale)}</strong> },
+    { key: "opening", label: en ? "Opening" : "Ouverture", numeric: true, render: (row) => ledgerAmount(row.openingBalance, row.functionalCurrencyCode, locale) },
+    { key: "debit", label: en ? "Period debit" : "Débit période", numeric: true, render: (row) => ledgerAmount(row.periodDebit, row.functionalCurrencyCode, locale) },
+    { key: "credit", label: en ? "Period credit" : "Crédit période", numeric: true, render: (row) => ledgerAmount(row.periodCredit, row.functionalCurrencyCode, locale) },
+    { key: "closing", label: en ? "Closing" : "Clôture", numeric: true, render: (row) => <strong>{ledgerAmount(row.closingBalance, row.functionalCurrencyCode, locale)}</strong> },
   ];
 
   const anomalyColumns: AccountingCompactColumn<AnyRow>[] = [
@@ -526,11 +533,12 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
     : space === "review" ? `/api/enterprise/${organizationId}/accounting-query?view=${reviewView === "ledger" ? "general-ledger" : reviewView === "trial" ? "trial-balance" : "anomalies"}`
       : `/api/enterprise/${organizationId}/${configureView === "rules" ? "account-mappings" : configureView === "charts" ? "charts-of-accounts" : configureView === "accounts" ? "ledger-accounts" : configureView === "years" ? "fiscal-years" : configureView === "periods" ? "fiscal-periods" : "journals"}`;
   const currentExportColumns: FinanceExportColumn[] = [
-    { key: "reference", labelFr: "Code / référence", labelEn: "Code / reference", get: (row) => rawText(row.code || row.number || row.reference || row.id) },
-    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => formatAccountingNarrative(row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code, locale) },
+    { key: "reference", labelFr: "Code / référence", labelEn: "Code / reference", get: (row) => rawText(row.code || row.number || row.reference || (row.journalEntry as Record<string, unknown> | undefined)?.number || "") },
+    { key: "description", labelFr: "Désignation", labelEn: "Description", get: (row) => formatAccountingNarrative(row.displayDescription || row.description || (en ? row.nameEn || row.nameFr : row.nameFr || row.nameEn) || (row.ledgerAccount as Record<string, unknown> | undefined)?.code, locale) },
     { key: "status", labelFr: "Statut", labelEn: "Status", get: (row) => financeStatusLabel(rawText(row.status), locale) },
     { key: "account", labelFr: "Compte", labelEn: "Account", get: (row) => rawText((row.ledgerAccount as Record<string, unknown> | undefined)?.code || row.mappingKey) },
-    { key: "date", labelFr: "Date comptable", labelEn: "Accounting date", get: (row) => financeDate(row.accountingDate || row.createdAt || row.startDate, locale) },
+    { key: "date", labelFr: "Date comptable", labelEn: "Accounting date", get: (row) => financeDate(row.accountingDate || (row.journalEntry as Record<string, unknown> | undefined)?.accountingDate || row.createdAt || row.startDate, locale) },
+    { key: "currency", labelFr: "Devise", labelEn: "Currency", get: (row) => rawText(row.functionalCurrencyCode || (row.journalEntry as Record<string, unknown> | undefined)?.functionalCurrencyCode || "") },
     { key: "debit", labelFr: "Débit", labelEn: "Debit", get: (row) => rawText(row.debit || row.totalDebit || row.periodDebit || "") },
     { key: "credit", labelFr: "Crédit", labelEn: "Credit", get: (row) => rawText(row.credit || row.totalCredit || row.periodCredit || "") },
   ];
@@ -567,6 +575,7 @@ export function EnterpriseFinanceAccountingWorkspace(props: Props) {
 
       {space === "post" ? loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={entries} columns={entryColumns} rowKey={(row) => row.id} onRowClick={(row) => setDetailEntryId(row.id)} emptyLabel={en ? "No journal entry matches these filters." : "Aucune écriture ne correspond à ces filtres."} minWidth="min-w-[980px]" /> : null}
 
+      {(space === "post" || (space === "review" && reviewView === "ledger")) && !loading ? <FinanceFilteredTotals rows={filteredTotals} locale={locale} /> : null}
       {space === "review" ? loading ? <ProfessionalLoading /> : reviewView === "ledger" ? <AccountingCompactTable rows={rows as LedgerRow[]} columns={ledgerColumns} rowKey={(row) => row.id} onRowClick={(row) => row.journalEntry?.id && setDetailEntryId(row.journalEntry.id)} emptyLabel={en ? "No ledger movement in this scope." : "Aucun mouvement de grand livre sur ce périmètre."} minWidth="min-w-[1180px]" /> : reviewView === "trial" ? <AccountingCompactTable rows={rows as TrialRow[]} columns={trialColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: "trial", row })} emptyLabel={en ? "No balance in this scope." : "Aucun solde sur ce périmètre."} minWidth="min-w-[860px]" /> : <AccountingCompactTable rows={rows} columns={anomalyColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: "anomalies", row })} emptyLabel={en ? "No posting anomaly." : "Aucune anomalie de comptabilisation."} minWidth="min-w-[820px]" /> : null}
 
       {space === "configure" ? configureView === "setup" ? <EnterpriseAccountingOnboardingPanel organizationId={organizationId} locale={rawLocale} canManage={canManage} /> : loading ? <ProfessionalLoading /> : <AccountingCompactTable rows={rows} columns={configColumns} rowKey={(row) => row.id} onRowClick={(row) => setRecordDetail({ kind: configureView as AccountingRecordDetailKind, row })} emptyLabel={en ? "No configuration item in this scope." : "Aucun élément de configuration sur ce périmètre."} minWidth="min-w-[760px]" /> : null}

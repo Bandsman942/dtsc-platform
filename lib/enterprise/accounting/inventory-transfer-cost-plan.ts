@@ -27,6 +27,7 @@ type Pool = {
 const scale = BigInt(1000000);
 const zero = BigInt(0);
 const maxStored = BigInt("99999999999999999999");
+const maxQuantityStored = BigInt("999999999999999999999");
 
 function unproven(): never {
   throw new EnterpriseAccountingError("INVENTORY_TRANSFER_COST_POOL_UNPROVEN",409);
@@ -35,10 +36,10 @@ function unrepresentable(): never {
   throw new EnterpriseAccountingError("INVENTORY_TRANSFER_COST_NOT_EXACT",409);
 }
 
-function micros(value: Prisma.Decimal, stored = true): bigint {
+function micros(value: Prisma.Decimal, stored = true, quantity = false): bigint {
   if (!value.isFinite() || value.isNegative() || value.decimalPlaces()>6) return unrepresentable();
   const units = BigInt(value.toFixed(6).replace(".",""));
-  if (stored && units > maxStored) return unrepresentable();
+  if (stored && units > (quantity ? maxQuantityStored : maxStored)) return unrepresentable();
   return units;
 }
 function decimalFromMicros(units: bigint): Prisma.Decimal {
@@ -62,7 +63,7 @@ function readPool(pool: Pool) {
   const rows=pool.layers.map(layer=>{
     if(!layer.id || ids.has(layer.id) || layer.currencyCode!==pool.currencyCode) return unproven();
     ids.add(layer.id);
-    const remaining=micros(layer.remainingQuantity);
+    const remaining=micros(layer.remainingQuantity, true, true);
     const cost=micros(layer.unitCost);
     if(remaining>zero && cost<=zero) return unproven();
     quantity+=remaining;
@@ -99,11 +100,11 @@ export type InventoryTransferCostPlan = {
  */
 export function planInventoryTransferCost(pool: Pool, quantity: Prisma.Decimal): InventoryTransferCostPlan {
   const source=readPool(pool);
-  const moved=micros(quantity);
-  // Physical movement columns persist three fractional digits.
-  if(quantity.decimalPlaces()>3 || moved<=zero || moved>source.quantity) return unproven();
+  const moved=micros(quantity, true, true);
+  // Physical movement columns preserve six fractional digits (#1228).
+  if(quantity.decimalPlaces()>6 || moved<=zero || moved>source.quantity) return unproven();
   const residual=planWeightedAverageResidualQuantities(pool.layers, quantity);
-  const byId=new Map(residual.map(row=>[row.id,micros(row.remainingQuantity)]));
+  const byId=new Map(residual.map(row=>[row.id,micros(row.remainingQuantity, true, true)]));
   let remainingValue=zero,remainingQuantity=zero;
   const allocations=source.rows.map(({layer,remaining,cost})=>{
     const next=byId.get(layer.id);
@@ -123,7 +124,7 @@ export function planInventoryTransferCost(pool: Pool, quantity: Prisma.Decimal):
   const total=moneyFromRaw(removed);
   const before=moneyFromRaw(source.value),after=moneyFromRaw(remainingValue);
   // Require exact raw value conservation AND reconciled rounded reports.
-  if(remainingQuantity!==source.quantity-moved || unitCost<=zero || unitCost>maxStored
+  if(source.quantity>maxQuantityStored || remainingQuantity!==source.quantity-moved || unitCost<=zero || unitCost>maxStored
       || total<=zero || total>maxStored || removed!==moved*unitCost || before-after!==total) return unrepresentable();
   return {
     currencyCode:pool.currencyCode,quantity,unitCost:decimalFromMicros(unitCost),totalCost:decimalFromMicros(total),
@@ -140,11 +141,11 @@ export function proveInventoryTransferDestination(
 ) {
   if(destination.currencyCode!==transfer.currencyCode) return unproven();
   const pool=readPool(destination);
-  const quantity=micros(transfer.quantity),unitCost=micros(transfer.unitCost),totalCost=micros(transfer.totalCost);
-  if(transfer.quantity.decimalPlaces()>3 || quantity<=zero || unitCost<=zero || totalCost<=zero) return unproven();
+  const quantity=micros(transfer.quantity, true, true),unitCost=micros(transfer.unitCost),totalCost=micros(transfer.totalCost);
+  if(transfer.quantity.decimalPlaces()>6 || quantity<=zero || unitCost<=zero || totalCost<=zero) return unproven();
   const increment=quantity*unitCost;
   const before=moneyFromRaw(pool.value),after=moneyFromRaw(pool.value+increment);
-  if(moneyFromRaw(increment)!==totalCost || after-before!==totalCost) return unrepresentable();
+  if(pool.quantity+quantity>maxQuantityStored || moneyFromRaw(increment)!==totalCost || after-before!==totalCost) return unrepresentable();
   return {
     destinationQuantityBefore:decimalFromMicros(pool.quantity),destinationQuantityAfter:decimalFromMicros(pool.quantity+quantity),
     destinationValueBefore:decimalFromMicros(before),destinationValueAfter:decimalFromMicros(after),

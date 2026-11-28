@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { getSession } from "@/lib/auth";
 import { writeApiLog } from "@/lib/audit";
 import { getEnterpriseCommonDomainAccess } from "@/lib/enterprise/common/access";
+import { listTransferUnitConversions } from "@/lib/enterprise/inventory/transfer-unit-conversion";
 import { retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { prisma } from "@/lib/prisma";
@@ -34,16 +35,18 @@ export async function GET(req: Request, { params }: Params) {
   } catch (error) {
     return retailErrorResponse(error, "RETAIL_SITE_ACCESS_DENIED");
   }
-  const lots = await prisma.enterpriseStockLot.findMany({
+  const [lots, conversions] = await Promise.all([prisma.enterpriseStockLot.findMany({
     where: { organizationId, warehouseId, inventoryItemId, status: loss ? {in:["AVAILABLE","BLOCKED","QUARANTINED"]} : "AVAILABLE", archivedAt: null },
     select: { id: true, lotNumber: true, expiryDate: true, status:true, balances: { where: { organizationId, warehouseId }, select: { quantityOnHand: true, quantityReserved: true, storageLocationId: true } } },
     orderBy: [{ expiryDate: "asc" }, { lotNumber: "asc" }],
     take: 250,
-  });
+  }), !loss && url.searchParams.get("includeUnitConversions") === "1"
+    ? prisma.$transaction(tx => listTransferUnitConversions(tx, organizationId, inventoryItemId, warehouseId), { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead })
+    : null]);
   await writeApiLog({ request: req, startedAt, statusCode: 200, userId: session.userId, metadata: { organizationId, domain: "stock-transfer-lot-selector", warehouseId, count: lots.length } });
   return NextResponse.json({ items: lots.map((lot) => ({
     id: lot.id, lotNumber: lot.lotNumber, expiryDate: lot.expiryDate, status:lot.status,
     quantityAvailable: lot.balances.reduce((sum, balance) => sum.plus(balance.quantityOnHand.minus(balance.quantityReserved)), new Prisma.Decimal(0)).toFixed(),
     locations: lot.balances.map((balance) => ({ storageLocationId: balance.storageLocationId, available: balance.quantityOnHand.minus(balance.quantityReserved).toFixed() })),
-  })) }, { headers: { "Cache-Control": "private, no-store" } });
+  })), ...(conversions ? { conversions } : {}) }, { headers: { "Cache-Control": "private, no-store" } });
 }

@@ -12,7 +12,7 @@ export type CommercialConnection = { module: string; labelFr: string; labelEn: s
  * only sends the user's filters to the canonical module API and exporter.
  */
 export function CommercialDesign2Controls({
-  locale, organizationName, title, endpoint, filters, columns, from, to,
+  locale, organizationName, title, endpoint, filters, reportFilters, columns, from, to,
   onDateChange, choices, status, onStatusChange, disabledExport = false, noteFr, noteEn,
 }: {
   locale: "fr" | "en";
@@ -20,6 +20,7 @@ export function CommercialDesign2Controls({
   title: string;
   endpoint: string;
   filters: Record<string, string>;
+  reportFilters?: { label: string; value: string }[];
   columns: FinanceExportColumn[];
   from: string;
   to: string;
@@ -44,7 +45,7 @@ export function CommercialDesign2Controls({
     </div> : null}
     <div className="flex min-w-0 flex-wrap items-end justify-between gap-3">
       <FinanceDateFilter locale={locale} from={from} to={to} onChange={onDateChange} />
-      <FinanceExportControls locale={locale} endpoint={endpoint} filters={filters} columns={columns}
+      <FinanceExportControls locale={locale} endpoint={endpoint} filters={filters} reportFilters={reportFilters} columns={columns}
         organizationName={organizationName} title={title} disabled={disabledExport}
         subtitleFr="DTSC Platform · Gestion commerciale & traçabilité"
         subtitleEn="DTSC Platform · Business operations & traceability" />

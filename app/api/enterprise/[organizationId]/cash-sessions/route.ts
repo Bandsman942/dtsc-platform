@@ -8,6 +8,7 @@ import { prisma } from "@/lib/prisma";
 import { getEnterpriseAccountingAccess } from "@/lib/enterprise/accounting/access";
 import { retailFinanceReadSiteScope } from "@/lib/enterprise/retail/site-access";
 import { enterpriseApprovalTargetDeepLink } from "@/lib/enterprise/approval-targets";
+import { cashClosingVarianceTotals, cashFlowTotals, cashSessionBalance, cashSessionCounts, cashSessionSummaries } from "@/lib/enterprise/accounting/cash-session-analytics";
 
 type Params = { params: Promise<{ organizationId: string }> };
 
@@ -22,36 +23,68 @@ export async function GET(req: Request, { params }: Params) {
   const dates = financeBusinessDateRange(req);
   if (!dates.ok) return dates.response;
   const recordId = url.searchParams.get("recordId")?.trim() || undefined;
-  const siteScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH");
-  const where: Prisma.EnterpriseCashSessionWhereInput = {
-    organizationId,
-    ...(dates.from || dates.to ? { openedAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
-    ...(siteScope !== null ? { siteId: { in: siteScope } } : {}),
-    ...(recordId ? { id: recordId } : {}),
-    ...(status ? { status } : {}),
-    ...(search ? {
-      OR: [
-        { financialAccount: { code: { contains: search, mode: "insensitive" } } },
-        { financialAccount: { name: { contains: search, mode: "insensitive" } } },
-        { financialAccount: { currencyCode: { contains: search, mode: "insensitive" } } },
+  const { rawItems, movementsBySession, total, analytics } = await prisma.$transaction(async (tx) => {
+    const siteScope = await retailFinanceReadSiteScope(organizationId, auth.session.userId, "CLOSE_CASH", tx);
+    const authorizedScope = { organizationId, ...(siteScope !== null ? { siteId: { in: siteScope } } : {}) };
+    const where: Prisma.EnterpriseCashSessionWhereInput = {
+      ...authorizedScope,
+      ...(dates.from || dates.to ? { openedAt: { ...(dates.from ? { gte: dates.from } : {}), ...(dates.to ? { lte: dates.to } : {}) } } : {}),
+      ...(recordId ? { id: recordId } : {}),
+      ...(status ? { status } : {}),
+      ...(search ? {
+        OR: [
+          { number: { contains: search, mode: "insensitive" } },
+          { financialAccount: { code: { contains: search, mode: "insensitive" } } },
+          { financialAccount: { name: { contains: search, mode: "insensitive" } } },
+          { financialAccount: { currencyCode: { contains: search, mode: "insensitive" } } },
+        ],
+      } : {}),
+    };
+    const general = recordId ? null : cashSessionSummaries(tx, organizationId, authorizedScope);
+    const filtered = recordId || !(dates.from || dates.to || status || search)
+      ? general : cashSessionSummaries(tx, organizationId, where);
+    const [rawItems, filteredResult, generalResult, recordCount] = await Promise.all([
+      tx.enterpriseCashSession.findMany({
+        where,
+        orderBy: [{ openedAt: "desc" }, { id: "desc" }],
+        skip: (page - 1) * pageSize,
+        take: pageSize,
+        include: {
+          financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
+          discrepancies: { where: { status: { in: ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_COUNT_ERROR","LEGACY_REVERSED","REAL_REVERSED","RESOLVED_CANONICAL"] } }, select: { id: true, status: true, amount: true, reason: true, journalEntryId: true, createdByUserId:true,approvedByUserId:true,canonicalTreasuryTransaction:{select:{fundingOperationId:true,paymentId:true,transferId:true}}, updatedAt: true }, orderBy: { createdAt: "desc" } },
+          _count: { select: { movements: true, counts: true, discrepancies: true } },
+        },
+      }),
+      filtered,
+      general,
+      recordId ? tx.enterpriseCashSession.count({ where }) : null,
+    ]);
+    const pageIds = rawItems.map(item => item.id);
+    const pageMovements = pageIds.length ? await tx.enterpriseCashMovement.groupBy({
+      by: ["cashSessionId", "currencyCode", "direction"],
+      where: { organizationId, cashSessionId: { in: pageIds } },
+      _sum: { amount: true },
+    }) : [];
+    const movementsBySession = new Map<string, typeof pageMovements>();
+    for (const movement of pageMovements) {
+      const existing = movementsBySession.get(movement.cashSessionId);
+      if (existing) existing.push(movement);
+      else movementsBySession.set(movement.cashSessionId, [movement]);
+    }
+    const analytics = filteredResult && generalResult ? {
+      metrics: { ...filteredResult.metrics, general: generalResult.metrics,
+        page: cashSessionCounts(rawItems.map(item => ({ status: item.status, count: 1 }))) },
+      filteredTotals: filteredResult.totals,
+      generalTotals: generalResult.totals,
+      pageTotals: [
+        ...cashFlowTotals(pageMovements),
+        ...cashClosingVarianceTotals(rawItems.filter(item => item.status === "CLOSED").map(item => ({
+          currencyCode: item.financialAccount.currencyCode, amount: item.discrepancyAmount,
+        }))),
       ],
-    } : {}),
-  };
-  const [rawItems, total] = await Promise.all([
-    prisma.enterpriseCashSession.findMany({
-      where,
-      orderBy: { openedAt: "desc" },
-      skip: (page - 1) * pageSize,
-      take: pageSize,
-      include: {
-        financialAccount: { select: { id: true, code: true, name: true, currencyCode: true } },
-        movements: { select: { direction: true, amount: true } },
-        discrepancies: { where: { status: { in: ["PENDING_QUALIFICATION","APPROVED","POSTED","RESOLVED_COUNT_ERROR","LEGACY_REVERSED","REAL_REVERSED","RESOLVED_CANONICAL"] } }, select: { id: true, status: true, amount: true, reason: true, journalEntryId: true, createdByUserId:true,approvedByUserId:true,canonicalTreasuryTransaction:{select:{fundingOperationId:true,paymentId:true,transferId:true}}, updatedAt: true }, orderBy: { createdAt: "desc" } },
-        _count: { select: { movements: true, counts: true, discrepancies: true } },
-      },
-    }),
-    prisma.enterpriseCashSession.count({ where }),
-  ]);
+    } : {};
+    return { rawItems, movementsBySession, total: filteredResult?.metrics.total ?? recordCount ?? 0, analytics };
+  }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
   const ids = rawItems.map((item) => item.id);
   const approvals = ids.length ? await prisma.enterpriseApproval.findMany({
     where: {
@@ -88,11 +121,8 @@ export async function GET(req: Request, { params }: Params) {
     getEnterpriseAccountingAccess({session:auth.session,organizationId,moduleCode:"FINANCE_PAYMENTS",action:"view"}),
   ]):[null,null];
   const canViewCanonicalSource=canonicalAccess.every(Boolean);
-  const items = rawItems.map(({ movements, discrepancies, ...item }) => {
-    const expectedCurrentAmount = movements.reduce(
-      (totalAmount, movement) => movement.direction === "INBOUND" ? totalAmount.plus(movement.amount) : totalAmount.minus(movement.amount),
-      new Prisma.Decimal(item.openingAmount),
-    );
+  const items = rawItems.map(({ discrepancies, ...item }) => {
+    const balance = cashSessionBalance(item.openingAmount, item.financialAccount.currencyCode, movementsBySession.get(item.id) ?? []);
     const approval = approvalBySessionId.get(item.id);
     const assignedToCurrentUser = approval?.status === "PENDING" && approval.approverUserId === auth.session.userId;
     return {
@@ -111,8 +141,11 @@ export async function GET(req: Request, { params }: Params) {
       closedByLabel: item.validatedAt ? operatorNames.get(item.validatedByUserId || "") || "—" : null,
       closedAt: item.validatedAt || null,
       currencyCode: item.financialAccount.currencyCode,
-      expectedCurrentAmount,
-      theoreticalClosingAmount: item.expectedClosingAmount ?? expectedCurrentAmount,
+      openingAmount: item.openingAmount.toFixed(),
+      countedClosingAmount: item.countedClosingAmount?.toFixed() ?? null,
+      discrepancyAmount: item.discrepancyAmount?.toFixed() ?? null,
+      ...balance,
+      theoreticalClosingAmount: item.expectedClosingAmount?.toFixed() ?? balance.expectedCurrentAmount,
       approval: approval ? {
         assigned: true,
         status: approval.status,
@@ -132,7 +165,10 @@ export async function GET(req: Request, { params }: Params) {
   });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "cash-sessions", hasSearch: Boolean(search), recordId: recordId || null } });
-  return NextResponse.json({ items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) } });
+  return NextResponse.json(
+    { items, pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) }, ...analytics },
+    { headers: { "Cache-Control": "private, no-store" } },
+  );
 }
 
 export async function POST(req: Request, { params }: Params) {

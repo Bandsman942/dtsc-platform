@@ -136,6 +136,24 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     expect(setup.regulatorySupport.supported).toBeTruthy();
     expect(setup.regulatorySupport.statementTypes).toEqual(expect.arrayContaining(["BALANCE_SHEET", "INCOME_STATEMENT"]));
 
+    const currentChart = setup.charts.find(chart => chart.id === chartId);
+    await page.getByRole("button", { name: "Comparer la politique marchandises" }).click();
+    const comparison = page.getByRole("region", { name: "Comparaison SYSCOHADA pour les marchandises" });
+    await expect(comparison).toContainText("6031");
+    const draft = await apiGet(page, `/api/enterprise/${organizationId}/accounting-setup?chartId=${encodeURIComponent(chartId)}&compareSyscohada=1`);
+    expect(draft.response.status()).toBe(200);
+    expect(draft.response.headers()["cache-control"]).toBe("private, no-store");
+    expect(draft.body.comparison.canApplyAutomatically).toBe(false);
+    const target = draft.body.comparison.diff.toReference;
+    expect(setup.templates.find(template => template.reference === target)).toBeUndefined();
+    const applyDraft = await apiPatch(page, `/api/enterprise/${organizationId}/accounting-setup`, {
+      action: "APPLY_SAFE_TEMPLATE_UPGRADE", chartId, targetTemplateReference: target, revision: currentChart.revision,
+    });
+    expect(applyDraft.response.status()).toBe(409);
+    expect((await setupPayload(page)).charts.find(chart => chart.id === chartId)).toMatchObject({
+      templateCode: defaultTemplateReference, revision: currentChart.revision,
+    });
+
     const accounts = await apiGet(page, `/api/enterprise/${organizationId}/ledger-accounts?search=701&page=1&pageSize=20`);
     const parent = (accounts.body?.items || []).find((item) => item.code === "701");
     expect(parent).toBeTruthy();
@@ -149,6 +167,9 @@ test.describe.serial("Accounting onboarding and production-readiness UX", () => 
     await signIn(page, { email: outsiderEmail, password: outsiderPassword, organization: null });
     const response = await page.context().request.get(`${baseUrl}/api/enterprise/${organizationId}/accounting-setup`);
     expect([403, 404]).toContain(response.status());
+    const comparison = await apiGet(page, `/api/enterprise/${organizationId}/accounting-setup?chartId=${encodeURIComponent(chartId)}&compareSyscohada=1`);
+    expect([403, 404]).toContain(comparison.response.status());
+    expect(comparison.body?.comparison).toBeUndefined();
   });
 
   test("production-like posting is balanced, idempotent, reportable and history-safe", async ({ page }) => {

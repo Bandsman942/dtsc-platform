@@ -163,6 +163,8 @@ session
 
 ## 10. UI/UX métier DTSC, mobile et accessibilité
 
+- Avant toute contribution, lire obligatoirement [le Design 2.0 normatif](docs/DTSC_FRONTEND_DESIGN_SYSTEM.md) et appliquer ses contrats D2-01 à D2-07, notamment précision des unités, agrégations serveur, libellés métiers et cohérence des exports. Les règles de sécurité et d'intégrité métier prévalent.
+
 - Réutiliser les primitives de `components/workspace/*`, notamment `ModuleWorkspace`, `ModuleHeader`, `ModuleMetrics`, `ModuleContent`, `ModuleSection`, `BusinessList`, `BusinessListItem`, `BusinessDetail`, `ContextActions`, `StatusBadge` et `EmptyState`, avant de créer des primitives parallèles.
 - Éviter les cartes dans des cartes ; préférer header métier → contrôles → contenu → actions contextuelles.
 - Les actions contextuelles passent par un menu `...`, sont réellement implémentées et respectent la permission serveur résolue pour l’objet et le module.

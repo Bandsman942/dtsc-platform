@@ -11,6 +11,9 @@ import { Button } from "@/components/ui/button";
 import { Dialog } from "@/components/ui/dialog";
 import { toastError, toastSuccess, notifyToast } from "@/lib/client-toast";
 import { customerFacingError } from "@/lib/customer-facing-language";
+import { inventoryQuantityStep, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
+import { incrementRetailQuantity, isRetailQuantityInputValid } from "@/lib/enterprise/retail/quantity-input";
+import { translateRetailWorkspace } from "@/lib/i18n";
 import { browserCivilDate } from "@/lib/enterprise/retail/civil-date";
 import { findRetailNavigationInvoice, retailInvoiceNavigationHref, type RetailInvoiceNavigationView } from "@/lib/enterprise/retail/invoice-navigation";
 
@@ -36,8 +39,8 @@ type InvoiceResponse = {
   pagination: { page: number; pageSize: number; total: number; pageCount: number };
   message?: string;
 };
-type Product = { id: string; name: string; code: string; sku?: string | null; currency: string | null; indicativeSalePrice: string | null; inventoryItemId: string | null; trackInventory: boolean; availableQuantity: string | null };
-type Line = { catalogItemId: string; name: string; code: string; quantity: number; currencyCode: string; unitPrice: string; inventoryItemId: string | null; stockLotId: string | null };
+type Product = { id: string; name: string; code: string; sku?: string | null; currency: string | null; indicativeSalePrice: string | null; inventoryItemId: string | null; trackInventory: boolean; availableQuantity: string | null; unitOfMeasure?: { decimalScale: number; symbol: string | null } | null };
+type Line = { catalogItemId: string; name: string; code: string; quantity: string; decimalScale: number; unitSymbol: string | null; currencyCode: string; unitPrice: string; inventoryItemId: string | null; stockLotId: string | null };
 type Lot = { id: string; inventoryItemId: string; lotNumber: string; expiryDate: string | null; quantityAvailable: string };
 type DirectOptions = {
   settings: { directCheckoutEnabled: boolean; quickPrintEnabled: boolean; simplifiedNavigationEnabled: boolean; defaultPaper: "A4" | "THERMAL_80MM"; cashTenderedDefault: "TOTAL" | "EMPTY" };
@@ -207,7 +210,9 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   const directAccounts = directOptions?.accounts.filter((account) => account.currencyCode === currencyCode) || [];
   const directSessions = directOptions?.cashSessions.filter((session) => session.financialAccountId === directAccountId) || [];
   const cashChange = cashTendered && pricing ? Number(cashTendered) - Number(pricing.grandTotal) : 0;
-  const directCanPay = directCash && Boolean(pricing && chosenWarehouse && directAccountId && directSessionId && currencyCode &&
+  const validQuantities = lines.every(line => isRetailQuantityInputValid(line.quantity, line.decimalScale));
+  const quantityError = translateRetailWorkspace(locale, "posQuantityUnit");
+  const directCanPay = directCash && validQuantities && Boolean(pricing && chosenWarehouse && directAccountId && directSessionId && currencyCode &&
     cashTendered.trim().length > 0 && Number.isFinite(Number(cashTendered)) && Number.isFinite(cashChange) && cashChange >= 0 && Number(pricing.grandTotal) > 0 && !pricingLoading && !submitting && !directBusy);
 
 
@@ -273,7 +278,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }, [mode, organizationId]);
 
   useEffect(() => {
-    if (mode !== "checkout" || !data?.checkoutReady || !chosenWarehouse || !lines.length || !invoiceCurrency) {
+    if (mode !== "checkout" || !data?.checkoutReady || !chosenWarehouse || !lines.length || !invoiceCurrency || !validQuantities) {
       setPricing(null); setPricingError(""); setPricingLoading(false); return;
     }
     setPricing(null); setPricingLoading(true); // Invalidate the previous cart's total before recalculation.
@@ -293,7 +298,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       } finally { if (!controller.signal.aborted) setPricingLoading(false); }
     }, 220);
     return () => { window.clearTimeout(timer); controller.abort(); };
-  }, [chosenWarehouse, copy.previewError, currencyCode, customerId, data?.checkoutReady, lines, locale, mode, organizationId]);
+  }, [chosenWarehouse, copy.previewError, currencyCode, customerId, data?.checkoutReady, lines, locale, mode, organizationId, validQuantities]);
 
   useEffect(() => {
     if (!data?.checkoutReady || !warehouseId || !query.trim()) { setProducts([]); return; }
@@ -321,9 +326,25 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   function addProduct(product: Product) {
     if (!invoiceCurrency) { setError(invoiceCurrencyError || (locale === "fr" ? "La devise de l’entreprise doit être configurée dans Finance." : "Company currency must be configured in Finance.")); return; }
     if (product.trackInventory && Number(product.availableQuantity || "0") <= 0) return;
-    setLines((current) => current.some((line) => line.catalogItemId === product.id)
-      ? current.map((line) => line.catalogItemId === product.id ? { ...line, quantity: line.quantity + 1 } : line)
-      : [...current, { catalogItemId: product.id, inventoryItemId: product.inventoryItemId, code: product.sku || product.code, name: product.name, quantity: 1, currencyCode: product.currency || "CDF", unitPrice: product.indicativeSalePrice || "0", stockLotId: null }]);
+    const unit = product.unitOfMeasure;
+    if (!unit || !inventoryQuantityStep(unit.decimalScale)) { toastError(quantityError); return; }
+    const existing = lines.find(line => line.catalogItemId === product.id);
+    if (existing && (!isRetailQuantityInputValid(existing.quantity, unit.decimalScale) || Number(existing.quantity) > 999_999)) {
+      toastError(quantityError);
+      return;
+    }
+    setLines(current => {
+      const line = current.find(entry => entry.catalogItemId === product.id);
+      if (!line) return [...current, {
+        catalogItemId: product.id, inventoryItemId: product.inventoryItemId, code: product.sku || product.code,
+        name: product.name, quantity: "1", decimalScale: unit.decimalScale, unitSymbol: unit.symbol,
+        currencyCode: product.currency || "CDF", unitPrice: product.indicativeSalePrice || "0", stockLotId: null,
+      }];
+      if (!isRetailQuantityInputValid(line.quantity, unit.decimalScale) || Number(line.quantity) > 999_999) return current;
+      return current.map(entry => entry === line ? {
+        ...line, quantity: String(incrementRetailQuantity(line.quantity)), decimalScale: unit.decimalScale, unitSymbol: unit.symbol,
+      } : entry);
+    });
     idempotencyKey.current = "";
     setPreviewOpen(false);
     setQuery(""); setProducts([]);
@@ -336,7 +357,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
       const priced = pricing.lines.find((item) => item.catalogItemId === line.catalogItemId);
       const fx = priced?.invoiceFx;
       const fxLabel = fx && fx.sourceCurrencyCode !== currencyCode ? `${fx.originalUnitPrice} ${fx.sourceCurrencyCode} × ${fx.rate} (${fx.rateDate.slice(0, 10)}) → ${currencyCode}` : "";
-      return `<tr><td>${esc(line.name)}<small>${esc(line.code)} ${esc(fxLabel)}</small></td><td class="num">${esc(line.quantity)}</td><td class="num">${esc(priced?.resolvedUnitPrice || "0")} ${esc(currencyCode)}</td><td class="num">${esc(priced?.lineTotal || "0")} ${esc(currencyCode)}</td></tr>`;
+      return `<tr><td>${esc(line.name)}<small>${esc(line.code)} ${esc(fxLabel)}</small></td><td class="num">${esc(localizeInventoryQuantity(line.quantity, locale))} ${esc(line.unitSymbol)}</td><td class="num">${esc(priced?.resolvedUnitPrice || "0")} ${esc(currencyCode)}</td><td class="num">${esc(priced?.lineTotal || "0")} ${esc(currencyCode)}</td></tr>`;
     }).join("");
     const html = `<!doctype html><html lang="${locale}"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${esc(copy.previewTitle)}</title><style>*{box-sizing:border-box}body{font-family:system-ui,Arial,sans-serif;max-width:790px;margin:0 auto;padding:24px;color:#14314c;background:white}.brand{border-bottom:3px solid #147ab7;padding-bottom:15px}.brand strong{color:#116da9;font-size:21px}.muted{color:#68788a;font-size:12px}.watermark{margin:18px 0;padding:10px;text-align:center;border:2px solid #d97706;color:#92400e;font-weight:800}table{width:100%;border-collapse:collapse;margin-top:20px;font-size:13px}td,th{border-bottom:1px solid #dce5ed;padding:9px 6px;text-align:left}th{background:#eaf4fc}small{display:block;color:#68788a}.num{text-align:right;font-variant-numeric:tabular-nums}.totals{max-width:310px;margin:20px 0 0 auto}.totals div{display:flex;justify-content:space-between;padding:5px 0}.grand{font-size:18px;font-weight:800;border-top:2px solid #147ab7}.print{background:#147ab7;color:white;padding:10px 18px;border:0;border-radius:9px;cursor:pointer}@page{size:A4;margin:12mm}@media print{body{padding:0}.print{display:none}}</style></head><body><header class="brand"><strong>${esc(organizationName || "DTSC Retail")}</strong><p>${esc(chosenWarehouse.siteName)} · ${esc(chosenWarehouse.name)}</p><p class="muted">${esc(customerName || (locale === "fr" ? "Client de passage" : "Walk-in customer"))}</p></header><div class="watermark">PRO FORMA · ${esc(copy.previewHint)}</div><table><thead><tr><th>${esc(copy.product)}</th><th class="num">${esc(copy.quantity)}</th><th class="num">${esc(locale === "fr" ? "Prix unitaire" : "Unit price")}</th><th class="num">${esc(copy.total)}</th></tr></thead><tbody>${rows}</tbody></table><div class="totals"><div><span>${esc(copy.subtotal)}</span><strong>${esc(money(pricing.subtotal, currencyCode, locale))}</strong></div><div><span>${esc(copy.discounts)}</span><strong>${esc(money(pricing.discountTotal, currencyCode, locale))}</strong></div><div><span>${esc(copy.tax)}</span><strong>${esc(money(pricing.taxTotal, currencyCode, locale))}</strong></div><div class="grand"><span>${esc(copy.total)}</span><strong>${esc(money(pricing.grandTotal, currencyCode, locale))}</strong></div></div><p class="muted">${esc(copy.invoiceOnly)}</p><button class="print" onclick="window.print()">${esc(locale === "fr" ? "Imprimer" : "Print")}</button></body></html>`;
     const url = URL.createObjectURL(new Blob([html], { type: "text/html;charset=utf-8" }));
@@ -350,7 +371,9 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     const intent = {
       siteId, warehouseId, businessPartyId: customerId, currencyCode,
       expectedGrandTotal: pricing.grandTotal,
-      lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, stockLotId: line.stockLotId, quantity: line.quantity })),
+      // Validated quantities fit in an exact number of micro-units. Preserve
+      // the numeric fingerprint used to recover existing direct-cash retries.
+      lines: lines.map((line) => ({ catalogItemId: line.catalogItemId, stockLotId: line.stockLotId, quantity: Number(line.quantity) })),
       payment: { methodType: "CASH", financialAccountId: directAccountId,
         cashSessionId: directSessionId, cashTendered },
     };
@@ -393,7 +416,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
   }
 
   async function prepare() {
-    if (!data?.checkoutReady || !chosenWarehouse || !lines.length || !pricing || !invoiceCurrency || pricingLoading || submitting) return;
+    if (!data?.checkoutReady || !chosenWarehouse || !lines.length || !pricing || !invoiceCurrency || !validQuantities || pricingLoading || submitting) return;
     setSubmitting(true);
     try {
       if (!idempotencyKey.current) idempotencyKey.current = crypto.randomUUID();
@@ -483,7 +506,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
           {!lines.length ? <p className="rounded-lg bg-dtsc-page p-3 text-sm text-dtsc-muted">{copy.noLines}</p> : null}
           {lines.map((line) => <div key={line.catalogItemId} className="min-w-0 space-y-2 border-b border-dtsc-border pb-2">
             <div className="flex min-w-0 items-start justify-between gap-2"><div className="min-w-0"><p className="break-words text-sm font-bold text-dtsc-ink">{line.name}</p><p className="text-xs text-dtsc-muted">{line.code} · {money(line.unitPrice, line.currencyCode, locale)}{pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.invoiceFx && line.currencyCode !== currencyCode ? ` → ${money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.resolvedUnitPrice || "0", currencyCode, locale)}` : ""}</p></div><Button type="button" size="sm" variant="outline" onClick={() => { idempotencyKey.current = ""; setLines((current) => current.filter((item) => item.catalogItemId !== line.catalogItemId)); }}><XCircle className="h-4 w-4" /></Button></div>
-            <label className="flex min-w-0 items-center gap-2 text-xs font-semibold text-dtsc-muted">{copy.quantity}<input type="number" min="0.001" max="1000000" step="0.001" value={line.quantity} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, quantity: Number(event.target.value) } : entry)); }} className="min-h-10 w-24 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /><strong className="ml-auto text-dtsc-ink">{money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.lineTotal || "0", currencyCode || line.currencyCode, locale)}</strong></label>
+            <label className="flex min-w-0 items-center gap-2 text-xs font-semibold text-dtsc-muted">{line.unitSymbol ? `${copy.quantity} (${line.unitSymbol})` : copy.quantity}<input type="number" inputMode="decimal" min={inventoryQuantityStep(line.decimalScale)} max="1000000" step={inventoryQuantityStep(line.decimalScale)} value={line.quantity} aria-invalid={!isRetailQuantityInputValid(line.quantity, line.decimalScale)} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, quantity: event.target.value } : entry)); }} className="min-h-10 w-24 min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm" /><strong className="ml-auto text-dtsc-ink">{money(pricing?.lines.find((item) => item.catalogItemId === line.catalogItemId)?.lineTotal || "0", currencyCode || line.currencyCode, locale)}</strong></label>
             {line.inventoryItemId && lots.some((lot) => lot.inventoryItemId === line.inventoryItemId) ? <label className="block min-w-0 text-xs font-semibold text-dtsc-muted">{copy.lot}<select value={line.stockLotId || ""} onChange={(event) => { idempotencyKey.current = ""; setLines((current) => current.map((entry) => entry.catalogItemId === line.catalogItemId ? { ...entry, stockLotId: event.target.value || null } : entry)); }} className="mt-1 block min-h-10 w-full min-w-0 rounded-lg border border-dtsc-border bg-dtsc-page px-2 text-sm"><option value="">{copy.chooseLot}</option>{lots.filter((lot) => lot.inventoryItemId === line.inventoryItemId && Number(lot.quantityAvailable) > 0).map((lot) => <option key={lot.id} value={lot.id}>{lot.lotNumber} · {lot.quantityAvailable}</option>)}</select></label> : null}
           </div>)}
           <p role="note" className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs leading-5 text-dtsc-ink">
@@ -494,6 +517,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
           {invoiceCurrencyError ? <p role="alert" className="text-xs font-semibold text-red-600">{invoiceCurrencyError}</p> : null}
           {invoiceCurrency ? <p className="text-xs font-semibold text-cyan-700 dark:text-cyan-300">{locale === "fr" ? "Devise de la facture définie dans Finance" : "Invoice currency from Finance"} : {invoiceCurrency}. {locale === "fr" ? "Les articles en devises différentes sont convertis au taux enregistré." : "Foreign-currency items use registered Finance rates."}</p> : null}
           {pricingLoading ? <p role="status" className="text-xs text-dtsc-muted">{locale === "fr" ? "Calcul des prix et taxes…" : "Calculating prices and taxes…"}</p> : null}
+          {!validQuantities ? <p role="alert" className="text-xs font-semibold text-red-700 dark:text-red-300">{quantityError}</p> : null}
           {pricingError ? <p role="alert" className="text-xs font-semibold text-red-700 dark:text-red-300">{pricingError}</p> : null}
           <div className="flex items-center justify-between gap-2 border-t border-dtsc-border pt-3"><span className="text-sm font-black text-dtsc-ink">{copy.total}</span><strong className="text-lg text-dtsc-blue">{money(pricing?.grandTotal || "0", currencyCode, locale)}</strong></div>
           {directOptions?.settings.directCheckoutEnabled && !directOptions.directAllowed ? <p role="note" className="rounded-lg bg-amber-500/10 p-3 text-xs leading-5 text-amber-700 dark:text-amber-200">{copy.directDenied}</p> : null}
@@ -522,7 +546,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
             <p className="break-words text-sm font-bold text-dtsc-ink">{copy.directReady} · {directReceipt.invoiceNumber}</p>
             <a className="inline-flex min-h-11 items-center rounded-lg border border-emerald-600/30 px-3 text-sm font-bold text-emerald-700 dark:text-emerald-300" href={`/api/enterprise/${encodeURIComponent(organizationId)}/retail/invoices/${encodeURIComponent(directReceipt.invoiceId)}/print?paper=${directOptions?.settings.defaultPaper === "A4" ? "a4" : "thermal"}&lang=${locale}`} target="_blank" rel="noopener noreferrer"><Printer className="mr-2 h-4 w-4" />{copy.directPrint}</a>
           </div> : null}
-          <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={!lines.length || submitting || directBusy} onClick={() => { cashTenderedEdited.current = false; setCashTendered(""); setLines([]); idempotencyKey.current = ""; }}>{copy.clear}</Button>{directCash ? <Button type="button" disabled={!directCanPay || !lines.length || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => void finalizeDirectCash()}><ArrowRight className="h-4 w-4" />{directBusy ? copy.directBusy : copy.directFinal}</Button> : <Button type="button" disabled={!chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting || lines.some((line) => !Number.isFinite(line.quantity) || line.quantity <= 0)} onClick={() => setPreviewOpen(true)}><ArrowRight className="h-4 w-4" />{copy.preview}</Button>}</div>
+          <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={!lines.length || submitting || directBusy} onClick={() => { cashTenderedEdited.current = false; setCashTendered(""); setLines([]); idempotencyKey.current = ""; }}>{copy.clear}</Button>{directCash ? <Button type="button" disabled={!directCanPay || !lines.length || !validQuantities} onClick={() => void finalizeDirectCash()}><ArrowRight className="h-4 w-4" />{directBusy ? copy.directBusy : copy.directFinal}</Button> : <Button type="button" disabled={!chosenWarehouse || !lines.length || !pricing || pricingLoading || submitting || !validQuantities} onClick={() => setPreviewOpen(true)}><ArrowRight className="h-4 w-4" />{copy.preview}</Button>}</div>
         </div>
       </div>
     </div> : null}
@@ -569,7 +593,7 @@ export function RetailInvoiceFlowWorkbench({ organizationId, organizationName, l
     <Dialog open={previewOpen} onClose={() => { if (!submitting) setPreviewOpen(false); }} title={copy.previewTitle} description={copy.previewHint} className="max-w-3xl" presentation="editor">
       {pricing && chosenWarehouse ? <div data-retail-invoice-proforma className="min-w-0 space-y-3">
         <div className="rounded-xl border-l-4 border-cyan-600 bg-dtsc-page p-3"><strong className="block break-words text-base text-dtsc-ink">{organizationName || "DTSC Retail"}</strong><p className="mt-1 text-xs text-dtsc-muted">{chosenWarehouse.siteName} · {chosenWarehouse.name}</p><p className="mt-1 text-xs text-dtsc-muted">{copy.client} : {customerName || (locale === "fr" ? "Client de passage" : "Walk-in customer")}</p></div>
-        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">{lines.map((line) => { const priced = pricing.lines.find((item) => item.catalogItemId === line.catalogItemId); return <div key={line.catalogItemId} className="flex min-w-0 flex-wrap justify-between gap-2 border-b border-dtsc-border py-2 text-sm"><span className="min-w-0 flex-1 break-words text-dtsc-ink">{line.name} × {line.quantity}</span><strong className="text-dtsc-ink">{money(priced?.lineTotal || "0", currencyCode, locale)}</strong></div>; })}</div>
+        <div className="grid min-w-0 grid-cols-[minmax(0,1fr)] gap-1.5">{lines.map((line) => { const priced = pricing.lines.find((item) => item.catalogItemId === line.catalogItemId); return <div key={line.catalogItemId} className="flex min-w-0 flex-wrap justify-between gap-2 border-b border-dtsc-border py-2 text-sm"><span className="min-w-0 flex-1 break-words text-dtsc-ink">{line.name} × {localizeInventoryQuantity(line.quantity, locale)} {line.unitSymbol}</span><strong className="text-dtsc-ink">{money(priced?.lineTotal || "0", currencyCode, locale)}</strong></div>; })}</div>
         <div className="ml-auto max-w-sm space-y-1 rounded-xl bg-dtsc-page p-3 text-sm"><div className="flex justify-between gap-2"><span>{copy.subtotal}</span><strong>{money(pricing.subtotal, currencyCode, locale)}</strong></div><div className="flex justify-between gap-2"><span>{copy.discounts}</span><strong>{money(pricing.discountTotal, currencyCode, locale)}</strong></div><div className="flex justify-between gap-2"><span>{copy.tax}</span><strong>{money(pricing.taxTotal, currencyCode, locale)}</strong></div><div className="flex justify-between gap-2 border-t border-dtsc-border pt-2 text-base font-black"><span>{copy.total}</span><strong>{money(pricing.grandTotal, currencyCode, locale)}</strong></div></div>
         <div data-responsive-actions className="flex flex-wrap justify-end gap-2"><Button type="button" variant="outline" disabled={submitting} onClick={printProforma}><Printer className="h-4 w-4" />{copy.printProforma}</Button><Button type="button" variant="outline" disabled={submitting} onClick={() => setPreviewOpen(false)}>{copy.cancelAbort}</Button><Button type="button" disabled={submitting || pricingLoading} onClick={() => void prepare()}><ArrowRight className="h-4 w-4" />{submitting ? copy.preparing : copy.confirm}</Button></div>
       </div> : <p className="text-sm text-dtsc-muted">{copy.previewError}</p>}
