@@ -34,7 +34,8 @@ import retailTransactionFormsEn from "@/locales/retail-transaction-forms.en.json
 import retailTransactionFormsFr from "@/locales/retail-transaction-forms.fr.json";
 import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError, customerFacingFinancialAccountType, customerFacingStatusLabel } from "@/lib/customer-facing-language";
-import { inventoryQuantityMicrounits, inventoryQuantityStep, isInventoryQuantityInputValid, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
+import { inventoryQuantityStep, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
+import { incrementRetailQuantity, isRetailQuantityInputValid } from "@/lib/enterprise/retail/quantity-input";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
@@ -110,11 +111,7 @@ function retailText(locale: "fr" | "en", key: RetailWorkspaceKey) {
 }
 
 function validCartQuantity(line: CartLine) {
-  return isInventoryQuantityInputValid(line.quantity, line.decimalScale) && Number(line.quantity) <= 1_000_000;
-}
-
-function addOneUnit(line: CartLine) {
-  return Number(inventoryQuantityMicrounits(line.quantity) + BigInt(1_000_000)) / 1_000_000;
+  return isRetailQuantityInputValid(line.quantity, line.decimalScale);
 }
 
 function GuidedField({
@@ -463,7 +460,7 @@ function PosOperate({
       notifyToast(retailText(locale, "posQuantityUnit"), "error");
       return;
     }
-    const incremented = existing ? addOneUnit(existing) : 1;
+    const incremented = existing ? incrementRetailQuantity(existing.quantity) : 1;
     if (incremented > 1_000_000 || (existing && item.trackInventory && !item.allowNegativeStock && stock !== null && incremented > stock)) {
       notifyToast(copy.itemUnavailable, "error");
       return;
@@ -476,7 +473,7 @@ function PosOperate({
       const currentLine = current.find((line) => line.catalogItemId === item.id);
       if (currentLine) {
         if (!validCartQuantity(currentLine)) return current;
-        const next = addOneUnit(currentLine);
+        const next = incrementRetailQuantity(currentLine.quantity);
         if (next > 1_000_000 || (item.trackInventory && !item.allowNegativeStock && stock !== null && next > stock)) return current;
         return current.map((line) => line.catalogItemId === item.id ? { ...line, quantity: String(next) } : line);
       }

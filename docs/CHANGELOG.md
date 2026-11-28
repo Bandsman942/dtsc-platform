@@ -15,6 +15,7 @@
 - Avoirs Retail. Le formulaire de retour et les quantités par lot suivent la précision de l’unité catalogue. Le cumul et la comparaison des lots conservent les micro-unités.
 - Immobilisations. Le registre et ses exports distinguent coûts d’acquisition, amortissements comptabilisés et valeur nette comptable par devise et statut. Les totaux nécessitant une vérification sont signalés.
 - Clôture magasin. Le rapport journalier lit les mouvements et les quantités dans un même instantané PostgreSQL. Il distingue la page, le résultat filtré et le total de la boutique sans recherche.
+- Facturation Retail. Le panier de préparation affiche l’unité du catalogue et conserve la saisie exacte jusqu’à l’aperçu et au brouillon. L’encaissement direct conserve la clé des tentatives en cours.
 - Stock : la saisie des transferts, comptages et ajustements suit la précision de l’unité catalogue. Lecture exacte des valeurs historiques et contrôle de la précision du produit lors des conversions.
 - Trésorerie : sous-totaux de l’historique par devise, statut et sens, avec comparaison du filtré, du général et de la page. Filtres et synthèses des exports partagent les calculs serveur.
 - Dépenses : sous-totaux et exports par devise et statut, calculés dans le périmètre autorisé du registre.

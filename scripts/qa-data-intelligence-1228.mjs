@@ -23,6 +23,12 @@ const { formatInventoryQuantity: format, inventoryQuantityExportValue: exportQua
 const { planFefoLots, readReservationLotAllocations } = load("lib/enterprise/inventory/lot-allocation.ts");
 const { Decimal } = Prisma;
 const { retailSaleCreateSchema } = load("lib/enterprise/retail/schemas.ts");
+const { incrementRetailQuantity, isRetailQuantityInputValid } = load("lib/enterprise/retail/quantity-input.ts");
+assert.equal(isRetailQuantityInputValid("1.000001", 6), true);
+assert.equal(isRetailQuantityInputValid("1.0000001", 6), false);
+assert.equal(isRetailQuantityInputValid("0.5", 0), false);
+assert.equal(isRetailQuantityInputValid("1000000.000001", 6), false);
+assert.equal(incrementRetailQuantity("0.000001"), 1.000001);
 
 const posPayload = {
   warehouseId: "warehouse", currencyCode: "CDF", idempotencyKey: "pos-unit-precision",

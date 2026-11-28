@@ -302,6 +302,45 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
     await prisma.$disconnect();
   });
 
+  test("Invoice checkout edits six-place catalog quantities before quoting", async ({ page }) => {
+    const configuration = await prisma.enterpriseRetailConfiguration.findUniqueOrThrow({ where: { organizationId } });
+    const product = await prisma.enterpriseCatalogItem.findUniqueOrThrow({ where: { id: fixture.catalogItemId } });
+    const warehouse = await prisma.enterpriseWarehouse.findUniqueOrThrow({ where: { id: fixture.warehouseId } });
+    const unit = await prisma.enterpriseUnitOfMeasure.create({ data: {
+      organizationId, code: `E2E-1229-QTY-${Date.now()}`, name: "E2E six-place unit", symbol: "kg", decimalScale: 6,
+    } });
+    try {
+      await prisma.$transaction([
+        prisma.enterpriseRetailConfiguration.update({ where: { organizationId }, data: { settingsJson: {
+          ...(configuration.settingsJson || {}), invoiceCheckoutEnabled: true,
+        } } }),
+        prisma.enterpriseCatalogItem.update({ where: { id: product.id }, data: { unitOfMeasureId: unit.id } }),
+      ]);
+      await signIn(page);
+      await page.goto(`/enterprise-modules/RETAIL_POS?section=checkout&siteId=${encodeURIComponent(warehouse.siteId)}`);
+      await page.getByRole("combobox", { name: /Boutique et dépôt|Store and warehouse/i }).selectOption(warehouse.id);
+      await page.getByPlaceholder(/Nom, référence ou code article|Item name, reference or code/i).fill(product.code);
+      await page.getByRole("button", { name: new RegExp(product.code) }).click();
+      const quantity = page.getByRole("spinbutton", { name: /Quantité \(kg\)|Quantity \(kg\)/i });
+      await expect(quantity).toHaveAttribute("step", "0.000001");
+      const quote = page.waitForResponse(response =>
+        response.url().includes("/retail/invoice-fx-preview") && response.request().method() === "POST" &&
+        response.request().postDataJSON().lines?.[0]?.quantity === "1.000001");
+      await quantity.fill("1.000001");
+      const accepted = await quote;
+      expect(accepted.ok(), await accepted.text()).toBeTruthy();
+      await expect(quantity).toHaveAttribute("aria-invalid", "false");
+      await quantity.fill("1.0000001");
+      await expect(quantity).toHaveAttribute("aria-invalid", "true");
+    } finally {
+      await prisma.$transaction([
+        prisma.enterpriseCatalogItem.update({ where: { id: product.id }, data: { unitOfMeasureId: product.unitOfMeasureId } }),
+        prisma.enterpriseRetailConfiguration.update({ where: { organizationId }, data: { settingsJson: configuration.settingsJson ?? Prisma.DbNull } }),
+        prisma.enterpriseUnitOfMeasure.delete({ where: { id: unit.id } }),
+      ]);
+    }
+  });
+
   test("POS sale, accounting, idempotency, reversal and last-stock concurrency", async ({ page }) => {
     await signIn(page);
     await ensureOpenTill(page);
