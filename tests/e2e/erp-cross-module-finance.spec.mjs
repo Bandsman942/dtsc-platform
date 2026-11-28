@@ -169,11 +169,22 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       const snapshot = (await (await balanceResponse).json()).metrics.treasuryBalanceAt;
       expect(snapshot).toMatchObject({ accountId: createdAccountId, currencyCode: currency.code, amount: "12.000001", status: "AVAILABLE" });
       await expect(authenticatedPage.getByText(/Solde opérationnel au|Operating balance as of/i)).toBeVisible();
-      const downloaded = authenticatedPage.waitForEvent("download");
-      await authenticatedPage.getByRole("button", { name: "CSV", exact: true }).click();
-      const csv = await readFile(await (await downloaded).path(), "utf8");
-      expect(csv).toMatch(/Solde opérationnel au|Operating balance as of/i);
-      expect(csv).toMatch(/12[,.]000001/);
+      async function downloadHistory(format) {
+        const downloaded = authenticatedPage.waitForEvent("download");
+        await authenticatedPage.getByRole("button", { name: format, exact: true }).click();
+        const file = await downloaded;
+        expect(await file.failure()).toBeNull();
+        return readFile(await file.path());
+      }
+      const balanceLine = /(?:Solde opérationnel au|Operating balance as of)[^\r\n]*12[,.]000001/i;
+      const csv = (await downloadHistory("CSV")).toString("utf8");
+      expect(csv).toMatch(balanceLine);
+      const excel = await downloadHistory("Excel");
+      expect(excel.subarray(0, 4)).toEqual(Buffer.from([0x50, 0x4b, 0x03, 0x04]));
+      expect(excel.toString("utf8")).toMatch(balanceLine);
+      const pdf = (await downloadHistory("PDF")).toString("latin1");
+      expect(pdf.slice(0, 5)).toBe("%PDF-");
+      expect(pdf).toMatch(/(?:Solde opérationnel au|Operating balance as of)[\s\S]{0,300}12[,.]000001/i);
 
       await transfersTab.click();
       await expect(transfersTab).toHaveAttribute("aria-pressed", "true");
