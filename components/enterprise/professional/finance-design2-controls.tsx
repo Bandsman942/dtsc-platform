@@ -15,6 +15,8 @@ import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalX
 import type { InventoryQuantityTotal } from "@/lib/enterprise/inventory/availability-analytics";
 import { inventoryQuantityMetricLabel, inventoryQuantityExportValue } from "@/lib/enterprise/inventory/quantity-display";
 import type { MonetaryScopes, MonetaryTotal } from "@/lib/enterprise/common/analytics";
+import type { TreasuryBalanceAt } from "@/lib/enterprise/accounting/treasury-balance-at";
+import { translateEnterpriseTreasury, type EnterpriseTreasuryCopyKey } from "@/lib/i18n/enterprise-treasury";
 
 type Locale = "fr" | "en";
 type DateMode = "all" | "today" | "week" | "month" | "exact" | "range";
@@ -151,8 +153,17 @@ export function FinanceAmountScopes({ totals, locale }: { totals: Partial<Moneta
   </div>;
 }
 
-type AnalyticalExportTotals = { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{unitId:string;unit:string;value:string;precisionMismatch:boolean}>; quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[] };
+type AnalyticalExportTotals = { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{unitId:string;unit:string;value:string;precisionMismatch:boolean}>; quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[]; metrics?: { treasuryBalanceAt?: TreasuryBalanceAt } };
 type PaginatedExportPayload = AnalyticalExportTotals & {items?:Record<string,unknown>[];pagination?:{pageCount?:number;total?:number};message?:string};
+
+export function treasuryBalanceAtKpi(balance: TreasuryBalanceAt, locale: Locale) {
+  const copy = (key: EnterpriseTreasuryCopyKey) => translateEnterpriseTreasury(locale, key);
+  const label = `${copy("historyBalanceAt")} ${balance.date} · ${balance.timezone}`;
+  const value = balance.amount !== null
+    ? formatAnalyticsAmount({ amount: balance.amount, currencyCode: balance.currencyCode }, locale)
+    : copy(balance.status === "BEFORE_ACCOUNT" ? "historyBalanceBeforeAccount" : balance.status === "FUTURE_DATE" ? "historyBalanceFuture" : "historyBalanceUnverified");
+  return { label, value };
+}
 function quantitySummaryKpis(rows:InventoryQuantityTotal[],locale:Locale,scope:"filtered"|"general") {
   return rows.map(row=>{const numeric=inventoryQuantityExportValue(row.value);return {label:`${scope==="filtered"?(locale==="fr"?"Sous-total filtré":"Filtered subtotal"):(locale==="fr"?"Total général autorisé sans filtres":"Authorized general total without filters")} · ${inventoryQuantityMetricLabel(row.metric,locale)} · ${row.unit}`,value:`${row.value} ${row.unit}${row.precisionMismatch?(locale==="fr"?" · Précision à vérifier":" · Precision needs review"):""}`,numericValue:typeof numeric==="number"?numeric:undefined};});
 }
@@ -192,6 +203,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.amount])),
         ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.amount])),
         ...(value.physicalTotals || []).map(row=>JSON.stringify(["physical",row.unitId,row.unit,row.value,row.precisionMismatch])),
+        ...(value.metrics?.treasuryBalanceAt ? [JSON.stringify(value.metrics.treasuryBalanceAt)] : []),
         ...(["quantityTotals","generalQuantityTotals"] as const).flatMap(scope=>(value[scope]||[]).map(row=>JSON.stringify([scope,row.metric,row.unitId,row.unit,row.decimalScale,row.value,row.precisionMismatch]))),
       ].sort());
       const firstSummary = summarySignature(body);
@@ -212,6 +224,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
       if (all.length !== total || new Set(ids).size !== ids.length) throw new Error(tr("Les données ont changé pendant l’export. Réessayez.", "Data changed during export. Retry."));
       // Date/status filters are validated and enforced by each module API, not a browser-only projection.
       const now = new Intl.DateTimeFormat(en ? "en-GB" : "fr-FR", { dateStyle: "long", timeStyle: "short" }).format(new Date());
+      const balance = body.metrics?.treasuryBalanceAt;
       const model: ProfessionalReportExportModel = {
         organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
@@ -224,6 +237,10 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         rows: all.map((row) => Object.fromEntries(columns.map((column) => [column.key, column.get(row)]))),
         accentHex: "#087EA4",
       };
+      if (balance) {
+        model.kpis.push(treasuryBalanceAtKpi(balance, locale));
+        model.includeCompleteSummary = true;
+      }
       if (format === "CSV") downloadProfessionalCsv(model);
       else if (format === "Excel") downloadProfessionalXlsx(model);
       else downloadProfessionalPdf(model);

@@ -5,7 +5,7 @@ import { Archive, CheckCircle2, Edit3, Eye, Plus, Send, ShieldCheck, XCircle } f
 import { useSearchParams } from "next/navigation";
 import { Field, NativeSelect } from "@/components/enterprise/core-v2/erp-v2-ui";
 import { FinanceReferenceSelect } from "@/components/enterprise/core-v2/finance-reference-select";
-import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
+import { FinanceAmountScopes, FinanceDateFilter, FinanceExportControls, treasuryBalanceAtKpi, type FinanceExportColumn } from "@/components/enterprise/professional/finance-design2-controls";
 import { EnterpriseApproverSelect } from "@/components/enterprise/enterprise-approver-select";
 import { EnterpriseFinanceFundingPanel, type FundingOperationRecord } from "@/components/enterprise/professional/enterprise-finance-funding-panel";
 import {
@@ -27,6 +27,7 @@ import { ContextActions } from "@/components/workspace/context-actions";
 import { ModuleContent, ModuleHeader, ModuleSection, ModuleToolbar, ModuleWorkspace } from "@/components/workspace/module-workspace";
 import { StatusBadge } from "@/components/workspace/status-badge";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
+import type { TreasuryBalanceAt } from "@/lib/enterprise/accounting/treasury-balance-at";
 import { translateEnterpriseTreasury, type EnterpriseTreasuryCopyKey } from "@/lib/i18n/enterprise-treasury";
 
 type Props = {
@@ -149,6 +150,9 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
   const endpoint = tab === "accounts" ? "financial-accounts" : tab === "funding" ? "funding-operations" : tab === "transfers" ? "account-transfers" : "treasury-history";
   const filters = useMemo<Record<string, string | boolean | undefined>>(() => tab === "history" ? { ...historyFilters, from: dateFrom, to: dateTo } : { dateFrom, dateTo }, [dateFrom, dateTo, historyFilters, tab]);
   const collection = useOperationalFinanceCollection<FinanceRecord>({ endpoint: `/api/enterprise/${organizationId}/${endpoint}`, page, search, status, filters, refreshKey });
+  const reportedBalance = collection.metrics.treasuryBalanceAt as TreasuryBalanceAt | undefined;
+  const balance = tab === "history" && reportedBalance?.accountId === historyFilters.accountId && reportedBalance?.date === dateTo
+    ? treasuryBalanceAtKpi(reportedBalance, locale) : undefined;
   const exportColumns: FinanceExportColumn[] = [
     { key: "reference", labelFr: "Référence / code", labelEn: "Reference / code", get: (row) => String(row.number || row.code || row.reference || "") },
     { key: "name", labelFr: "Intitulé", labelEn: "Name", get: (row) => String(row.name || row.description || (row.transactionType ? financeEnumLabel(String(row.transactionType), locale) : "")) },
@@ -282,6 +286,11 @@ export function EnterpriseFinanceTreasuryWorkspace(props: Props) {
           <FinanceDateFilter locale={locale} from={dateFrom} to={dateTo} onChange={(from, to) => { setDateFrom(from); setDateTo(to); setPage(1); }} />
           <FinanceExportControls endpoint={`/api/enterprise/${organizationId}/${endpoint}`} organizationName={organizationName} title={`${locale === "en" ? definition.labelEn : definition.labelFr} · ${sectionTitle}`} locale={locale} filters={{ search, status, ...Object.fromEntries(Object.entries(filters).map(([key, value]) => [key, typeof value === "boolean" ? String(value) : value || ""])) }} columns={exportColumns} disabled={collection.loading || Boolean(collection.error)} />
         </div>
+        {balance && !collection.loading && !collection.error ? <div className="min-w-0 rounded-xl border border-dtsc-border p-3">
+          <p className="text-xs font-semibold text-dtsc-muted">{balance.label}</p>
+          <p className="break-words font-semibold text-dtsc-ink">{balance.value}</p>
+          <p className="text-xs text-dtsc-muted">{t("historyBalanceScope")}</p>
+        </div> : null}
       </div>}
       summary={tab === "history" ? t("historyDescription") : tab === "funding" ? t("fundingNonRevenueNotice") : t("immutableStructure")}
     />

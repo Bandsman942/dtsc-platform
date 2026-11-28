@@ -1,6 +1,6 @@
 # #1228 — Audit de l’imputation des stocks
 
-Statut : anomalie de mapping confirmée dans le code ; correction comptable et configuration de l’écriture utilisateur non certifiées. Aucun journal historique modifié.
+Statut de l’audit au 27 novembre 2026. L’imputation et la configuration de la pièce signalée ont été vérifiées en lecture. La correction comptable versionnée reste à certifier.
 
 ## Source vérifiée
 
@@ -37,7 +37,9 @@ La baseline `OHADA_SYSCOHADA@0.1.0` est publiée et immuable par décision propr
 
 Pour `ST-MWW9CKWQ-A56124`, aucune devise, désignation historique, catégorie de marchandise, quantité, configuration effective ni source originale ne sont inventées depuis la capture. Le rapprochement de cette pièce reste à effectuer en lecture autorisée. Si l’imputation historique est erronée, la correction passe par contrepassation liée et nouvelle comptabilisation dans une période autorisée, jamais par mise à jour d’une écriture POSTED.
 
-La clôture du lot comptable reste bloquée sur la politique versionnée coordonnée, les tests d’intégration correspondants et la preuve de configuration/source de la pièce signalée.
+Le 27 novembre, la lecture ciblée de la pièce a confirmé une sortie valorisée, liée par son événement comptable au mouvement de livraison d’une facture client. La configuration de l’entreprise utilise le coût moyen pondéré et le plan SYSCOHADA 0.1.0. Le journal est comptabilisé avec un débit en 601 et un crédit en 311. Les deux libellés enregistrés contiennent l’identifiant de l’article de stock, alors que la liaison au catalogue est disponible. L’historique d’entrées comprend des réceptions d’achat et un ajustement. Le type générique du catalogue et cet historique ne suffisent pas à attribuer automatiquement une classe comptable à tous les mouvements de l’article.
+
+La clôture du lot comptable dépend de la politique versionnée coordonnée, de la qualification explicite des articles et des tests d’intégration correspondants. La pièce a été inspectée sans mouvement, changement de compte ou modification du journal.
 
 ## Candidat isolé — 26 novembre
 

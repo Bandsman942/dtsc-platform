@@ -2,7 +2,9 @@ import { Prisma } from "@prisma/client";
 import { NextResponse } from "next/server";
 import { writeApiLog } from "@/lib/audit";
 import { authorizeFinanceRequest, financeListParams } from "@/lib/enterprise/accounting/http";
+import { readTreasuryBalanceAt } from "@/lib/enterprise/accounting/treasury-balance-at";
 import { directionalAmountTotals, directionalPageTotals } from "@/lib/enterprise/common/analytics";
+import { isValidEnterpriseActivityCivilDate } from "@/lib/enterprise/enterprise-activity-civil-date";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -26,7 +28,8 @@ export async function GET(req: Request, { params }: Params) {
   const direction = url.searchParams.get("direction")?.trim() || undefined;
   const currencyCode = url.searchParams.get("currencyCode")?.trim().toUpperCase() || undefined;
   const from = validDate(url.searchParams.get("from"));
-  const to = validDate(url.searchParams.get("to"));
+  const closingDate = url.searchParams.get("to") || "";
+  const to = validDate(closingDate);
   if (to) to.setHours(23, 59, 59, 999);
 
   const where: Prisma.EnterpriseTreasuryTransactionWhereInput = {
@@ -47,7 +50,7 @@ export async function GET(req: Request, { params }: Params) {
       _sum: { amount: true },
     });
     const general = aggregateByDirection({ organizationId });
-    const [rawItems, total, filteredGroups, generalGroups] = await Promise.all([
+    const [rawItems, total, filteredGroups, generalGroups, balanceAt] = await Promise.all([
       tx.enterpriseTreasuryTransaction.findMany({
         where,
         orderBy: [{ transactionDate: "desc" }, { createdAt: "desc" }, { id: "desc" }],
@@ -62,6 +65,9 @@ export async function GET(req: Request, { params }: Params) {
       tx.enterpriseTreasuryTransaction.count({ where }),
       Object.keys(where).length === 1 ? general : aggregateByDirection(where),
       general,
+      accountId && isValidEnterpriseActivityCivilDate(closingDate)
+        ? readTreasuryBalanceAt(tx, organizationId, accountId, closingDate, new Date(startedAt))
+        : null,
     ]);
     const transferIds = [...new Set(rawItems.map((item) => item.transferId).filter((id): id is string => Boolean(id)))];
     const transfers = transferIds.length ? await tx.enterpriseAccountTransfer.findMany({
@@ -76,6 +82,7 @@ export async function GET(req: Request, { params }: Params) {
     return {
       items,
       pagination: { page, pageSize, total, pageCount: Math.max(1, Math.ceil(total / pageSize)) },
+      ...(balanceAt ? { metrics: { treasuryBalanceAt: balanceAt } } : {}),
       filteredTotals: directionalAmountTotals(filteredGroups.map((group) => ({ ...group, amount: group._sum.amount }))),
       generalTotals: directionalAmountTotals(generalGroups.map((group) => ({ ...group, amount: group._sum.amount }))),
       pageTotals: directionalPageTotals(rawItems),
@@ -83,5 +90,5 @@ export async function GET(req: Request, { params }: Params) {
   }, { isolationLevel: Prisma.TransactionIsolationLevel.RepeatableRead });
 
   await writeApiLog({ request: req, statusCode: 200, userId: auth.session.userId, startedAt, metadata: { organizationId, domain: "treasury-history" } });
-  return NextResponse.json(result);
+  return NextResponse.json(result, { headers: { "Cache-Control": "private, no-store" } });
 }

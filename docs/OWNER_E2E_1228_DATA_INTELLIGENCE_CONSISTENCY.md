@@ -32,7 +32,7 @@ La recette concerne la PR #1229 et la version candidate 1.24.5. Exécuter les sc
 
 1. Créer une sortie de stock valorisée puis ouvrir le journal et le grand livre. Vérifier la référence, la désignation enregistrée, le coût, les comptes, l’équilibre et l’idempotence. Après renommage de l’article, vérifier que la désignation du posting d’origine reste lisible.
 2. Ouvrir une écriture historique et vérifier la distinction entre désignation enregistrée, désignation actuelle retrouvée et référence introuvable. Contrôler aussi la recherche et l’export.
-3. Reprendre la pièce ST‑MWW9CKWQ‑A56124 avec la méthode configurée, la catégorie de l’article, le mouvement d’origine et le référentiel effectif. Vérifier la politique versionnée appliquée dans une organisation de recette depuis réception et facture fournisseur jusqu’à sortie, retour et états. Comparer les références historiques avant et après le changement de version.
+3. Reproduire sur une organisation de recette l’imputation de la pièce auditée, une livraison de facture client valorisée au coût moyen pondéré avec SYSCOHADA 0.1.0. Vérifier la politique versionnée depuis la réception et la facture fournisseur jusqu’à la sortie, aux retours et aux états. Comparer les références historiques avant et après le changement de version.
 4. Dans Comptabilité → Configurer → Mise en service, sélectionner le plan SYSCOHADA 0.1.0 et ouvrir **Comparer la politique marchandises**. Vérifier le compte proposé, le signalement si son code existe et le total des écritures comptabilisées ou contrepassées. À partir du grand livre et de la balance, contrôler une ligne portant six décimales et la rapprocher de l’export.
 
 ## Présentation et validation
@@ -74,3 +74,7 @@ Avec une caisse ouverte, confirmer un dépôt puis un change pendant une périod
 ### Mobile Money — reprise d’une confirmation fournisseur
 
 Avec un adaptateur de recette, obtenir une confirmation alors que la période comptable est fermée. Vérifier le statut 202 et le message « enregistrement en attente », le maintien de la référence fournisseur et l’absence de mouvement et d’écriture. Rouvrir la période et utiliser le rapprochement de la demande existante. Vérifier que le journal et les mouvements portent une seule fois sur la même opération et que la reprise conserve sa date de confirmation sans nouvel appel fournisseur.
+
+### Trésorerie — solde d’un compte à date
+
+Ouvrir **Trésorerie → Historique** et sélectionner un compte ou un wallet et une date de fin. Comparer le solde de la date passée avec le solde d’ouverture et les mouvements antérieurs à minuit dans le fuseau de l’entreprise. Inclure une opération ensuite contrepassée et vérifier son effet avant puis après la contrepassation. Changer le statut, la recherche et la page et vérifier que le solde du compte à la date reste identique. Comparer l’écran et les synthèses CSV, Excel et PDF. Vérifier qu’une date avant l’ouverture ou après aujourd’hui, ainsi qu’un historique impossible à rapprocher du solde courant, produisent un état explicite sans montant.

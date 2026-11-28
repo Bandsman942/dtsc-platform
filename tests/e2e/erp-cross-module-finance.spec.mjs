@@ -1,5 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { PrismaClient } from "@prisma/client";
+import { readFile } from "node:fs/promises";
 
 const prisma = new PrismaClient();
 const baseUrl = process.env.E2E_BASE_URL || "http://127.0.0.1:3000";
@@ -119,6 +120,13 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
     expect(created.response.ok(), JSON.stringify(created.body)).toBeTruthy();
     const createdAccountId = created.body?.account?.id;
     expect(createdAccountId, "Treasury E2E account creation must return the created account id").toBeTruthy();
+    await prisma.$transaction([
+      prisma.enterpriseFinancialAccount.update({ where: { id: createdAccountId }, data: { operationalBalance: "12.000001" } }),
+      prisma.enterpriseTreasuryTransaction.create({ data: {
+        organizationId, financialAccountId: createdAccountId, currencyCode: currency.code, transactionType: "FUNDING",
+        direction: "INBOUND", amount: "12.000001", transactionDate: new Date(), reference: accountName, createdByUserId: adminUserId,
+      } }),
+    ]);
 
     const pageErrors = [];
     const capturePageError = (error) => pageErrors.push(error.message);
@@ -146,6 +154,26 @@ test.describe.serial("ERP cross-module Finance acceptance", () => {
       expect((await firstHistoryResponse).ok()).toBeTruthy();
       await expect(historyTab).toHaveAttribute("aria-pressed", "true");
       await expect(authenticatedPage.getByText("Application error: a client-side exception has occurred")).toHaveCount(0);
+
+      await authenticatedPage.getByRole("textbox", { name: /^(Rechercher Compte|Search Account)$/i }).fill(accountName);
+      await authenticatedPage.locator('select[name="historyAccountId"]').selectOption(createdAccountId);
+      const organization = await prisma.organization.findUniqueOrThrow({ where: { id: organizationId }, select: { timezone: true } });
+      const orgDate = new Intl.DateTimeFormat("sv-SE", { timeZone: organization.timezone, year: "numeric", month: "2-digit", day: "2-digit" }).format(new Date());
+      const balanceResponse = authenticatedPage.waitForResponse((response) => {
+        if (!response.url().includes("/treasury-history?")) return false;
+        const params = new URL(response.url()).searchParams;
+        return params.get("accountId") === createdAccountId && params.get("to") === orgDate;
+      });
+      await authenticatedPage.getByRole("combobox", { name: /Choisir un filtre de date|Choose date filter/i }).selectOption("exact");
+      await authenticatedPage.getByLabel(/Calendrier de la date de début|Start date calendar/i).fill(orgDate);
+      const snapshot = (await (await balanceResponse).json()).metrics.treasuryBalanceAt;
+      expect(snapshot).toMatchObject({ accountId: createdAccountId, currencyCode: currency.code, amount: "12.000001", status: "AVAILABLE" });
+      await expect(authenticatedPage.getByText(/Solde opérationnel au|Operating balance as of/i)).toBeVisible();
+      const downloaded = authenticatedPage.waitForEvent("download");
+      await authenticatedPage.getByRole("button", { name: "CSV", exact: true }).click();
+      const csv = await readFile(await (await downloaded).path(), "utf8");
+      expect(csv).toMatch(/Solde opérationnel au|Operating balance as of/i);
+      expect(csv).toMatch(/12[,.]000001/);
 
       await transfersTab.click();
       await expect(transfersTab).toHaveAttribute("aria-pressed", "true");

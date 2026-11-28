@@ -71,6 +71,13 @@ const tx = {
 };
 const load = workflowTestLoader({
   "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/treasury-balance-at": { readTreasuryBalanceAt: async (reader, organizationId, accountId, date) => {
+    assert.equal(reader, tx);
+    assert.equal(organizationId, tenant);
+    assert.equal(accountId, "account");
+    assert.equal(date, "2026-11-25");
+    return { accountId, date, timezone: "Africa/Kinshasa", currencyCode: "CDF", amount: "10.000001", status: "AVAILABLE" };
+  } },
   "@/lib/enterprise/accounting/http": {
     authorizeFinanceRequest: async (_req, org, feature, action) => {
       assert.equal(feature, "FINANCE_TREASURY");
@@ -102,6 +109,8 @@ assert.equal(page6.items.length, 6);
 assert.deepEqual(page1.filteredTotals, [{ currencyCode: "CDF", status: "CONFIRMED", metric: "inbound", amount: exactSum(56) }]);
 assert.deepEqual(page1.filteredTotals, page6.filteredTotals);
 assert.deepEqual(page1.generalTotals, page6.generalTotals);
+assert.deepEqual(page1.metrics, page6.metrics);
+assert.equal(page1.metrics.treasuryBalanceAt.amount, "10.000001");
 assert.equal(page1.pageTotals[0].amount, exactSum(10));
 assert.equal(page6.pageTotals[0].amount, exactSum(6));
 assert.ok(page1.generalTotals.some((row) => row.status === "REVERSED" && row.amount === "0.000001"));

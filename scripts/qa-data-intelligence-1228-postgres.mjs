@@ -51,6 +51,56 @@ const { GET: getTreasuryHistory } = workflowTestLoader({
     },
   },
 })("@/app/api/enterprise/[organizationId]/treasury-history/route");
+
+async function verifyTreasuryBalanceAt(tenant, anotherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    await tx.organization.create({ data: { id: tenant, name: "QA Treasury balance", status: "ACTIVE", timezone: "Africa/Kinshasa" } });
+    const createWallet = async (organizationId, code) => {
+      const chart = await tx.enterpriseChartOfAccounts.create({ data: { organizationId, code, nameFr: code, nameEn: code, createdByUserId: actor } });
+      const ledger = await tx.enterpriseLedgerAccount.create({ data: { organizationId, chartId: chart.id, code, nameFr: code, nameEn: code, accountType: "ASSET" } });
+      return tx.enterpriseFinancialAccount.create({
+        data: { organizationId, ledgerAccountId: ledger.id, code, name: code, accountType: "MOBILE_MONEY", currencyCode: "CDF",
+          createdAt: new Date("2026-11-01T10:00:00Z"), openingBalance: "100.000001", operationalBalance: "116.000001" },
+      });
+    };
+    const wallet = await createWallet(tenant, "DATE-WALLET");
+    const foreign = await createWallet(anotherTenant, "DATE-WALLET");
+    const movement = { organizationId: tenant, financialAccountId: wallet.id, currencyCode: "CDF", status: "CONFIRMED", createdByUserId: actor };
+    await tx.enterpriseTreasuryTransaction.createMany({ data: [
+      { ...movement, transactionType: "FUNDING", direction: "INBOUND", amount: "20", transactionDate: new Date("2026-11-05T22:59:59.999Z") },
+      { ...movement, transactionType: "PAYMENT", direction: "INBOUND", amount: "12", transactionDate: new Date("2026-11-05T13:00:00Z"),
+        status: "REVERSED", reversedAt: new Date("2026-11-06T09:00:00Z") },
+      { ...movement, transactionType: "MOBILE_MONEY_FX_TRANSFER", direction: "OUTBOUND", amount: "4", transactionDate: new Date("2026-11-05T23:00:00.000Z") },
+    ] });
+    Object.assign(treasuryFixture, { reader: tx, organizationId: tenant, actor });
+    const read = async (query) => {
+      const response = await getTreasuryHistory(new Request(`http://127.0.0.1/api/enterprise/${tenant}/treasury-history?${query}`), {
+        params: Promise.resolve({ organizationId: tenant }),
+      });
+      assert.equal(response.status, 200);
+      assert.equal(response.headers.get("cache-control"), "private, no-store");
+      return response.json();
+    };
+    const scopedQuery = "accountId=" + wallet.id;
+    const first = await read(scopedQuery + "&to=2026-11-05&search=NO-SUCH-REFERENCE");
+    const balance = first.metrics.treasuryBalanceAt;
+    assert.equal(first.pagination.total, 0);
+    assert.deepEqual(balance, { accountId: wallet.id, date: "2026-11-05", timezone: "Africa/Kinshasa", currencyCode: "CDF", amount: "132.000001", status: "AVAILABLE" });
+    assert.deepEqual((await read(scopedQuery + "&to=2026-11-05&page=9")).metrics.treasuryBalanceAt, balance);
+    assert.equal((await read(scopedQuery + "&to=2026-11-06")).metrics.treasuryBalanceAt.amount, "116.000001");
+    assert.equal((await read(scopedQuery + "&to=2026-10-30")).metrics.treasuryBalanceAt.status, "BEFORE_ACCOUNT");
+    assert.equal((await read(scopedQuery + "&to=2099-01-01")).metrics.treasuryBalanceAt.status, "FUTURE_DATE");
+    const forbidden = await read("accountId=" + foreign.id + "&to=2026-11-05");
+    assert.equal(forbidden.metrics, undefined);
+    await tx.enterpriseFinancialAccount.update({ where: { id: wallet.id }, data: { operationalBalance: "117.000001" } });
+    const inconsistent = (await read(scopedQuery + "&to=2026-11-05")).metrics.treasuryBalanceAt;
+    assert.equal(inconsistent.status, "UNVERIFIED_HISTORY");
+    assert.equal(inconsistent.amount, null);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  console.log("PASS #1228 PostgreSQL Treasury balance at date: exact minor units, local midnight, later reversal, filter independence and missing history");
+}
+
 const { GET: getExpenses } = workflowTestLoader({
   "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
     assert.equal(options.isolationLevel, "RepeatableRead");
@@ -1110,6 +1160,7 @@ try {
   await verifyProjectAnalytics(tenant, otherTenant, actor);
   await verifyCashAnalytics(tenant, otherTenant, actor);
   await verifyConnectedMobileMoney(tenant, actor);
+  await verifyTreasuryBalanceAt(tenant, otherTenant, actor);
   await verifyLedgerSearch(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
