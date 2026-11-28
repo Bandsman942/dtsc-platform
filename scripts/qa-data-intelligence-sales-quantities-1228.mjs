@@ -15,7 +15,7 @@ const tx={
   enterpriseQuote:{create:async({data})=>{writes++;created=data;return{...data,id:"quote",status:"DRAFT"};},findFirst:async()=>quote,updateMany:async()=>({count:1})},
   enterpriseSalesOrder:{findFirst:async()=>existing,findUniqueOrThrow:async()=>existing,create:async({data})=>{writes++;created=data;return{...data,id:"order"};}},
 };
-const dependencies={"@/lib/prisma":{prisma:{$transaction:fn=>fn(tx)}},"@/lib/enterprise/crm-sales/helpers":{assertActiveClientOrganization:async()=>{},enterpriseReference:()=>"REF",publishEnterpriseEvent:async()=>{},roundMoney:value=>Math.round((value+Number.EPSILON)*100)/100}};
+const dependencies={"@/lib/prisma":{prisma:{$transaction:fn=>fn(tx)}},"@/lib/enterprise/crm-sales/helpers":{assertActiveClientOrganization:async()=>{},enterpriseReference:()=>"REF",publishEnterpriseEvent:async()=>{}}, "@/lib/enterprise/workflows/domain-events": {}};
 const quotes=load("lib/enterprise/crm-sales/quotes.ts",dependencies),orders=load("lib/enterprise/crm-sales/orders.ts",dependencies);
 const line=quantity=>({catalogItemId:"product",description:"Product",quantity,unitPrice:10,discountRate:0,taxRate:0,discountAmount:0,taxRatePercent:0,taxAmount:0,lineSubtotal:10,lineTotal:10});
 const input=quantity=>({businessPartyId:"party",title:"Quote",currency:"USD",idempotencyKey:"test-key",items:[line(quantity)]});
@@ -43,6 +43,29 @@ units=[{id:"free",organizationId:"tenant",decimalScale:0,status:"ACTIVE",archive
 await assert.rejects(resolve(tx,"tenant",[{quantity:"1.1",unitOfMeasureId:"free"}]),{code:"INVENTORY_UNIT_QUANTITY_PRECISION"});
 await assert.rejects(resolve(tx,"tenant",[{quantity:1,unitOfMeasureId:"foreign"}]),{code:"UNIT_OF_MEASURE_NOT_FOUND"});
 assert.equal((await resolve(tx,"tenant",[{quantity:"0.000001"}]))[0].unitOfMeasureId,null);
+setUnit(6);
+await quotes.createEnterpriseQuote("tenant", "actor", {
+  ...input(1), items: [{ ...line(1_000_000), unitPrice: 999_999_999.99 }, { ...line(1), unitPrice: 0.01 }],
+});
+assert.equal(created.subtotalAmount.toFixed(), "999999999990000.01");
+assert.equal(created.totalAmount.toFixed(), "999999999990000.01");
+await quotes.createEnterpriseQuote("tenant", "actor", {
+  ...input(3), items: [{ ...line(3), unitPrice: 1.005, discountRate: 5, taxRate: 16 }],
+});
+const pricedLine = created.items.create[0];
+assert.equal(pricedLine.unitPrice.toFixed(), "1.01");
+assert.equal(pricedLine.lineSubtotal.toFixed(), "3.03");
+assert.equal(pricedLine.discountAmount.toFixed(), "0.15");
+assert.equal(pricedLine.taxAmount.toFixed(), "0.46");
+assert.equal(pricedLine.lineTotal.toFixed(), "3.34");
+await orders.createEnterpriseDirectSalesOrder("tenant", "actor", {
+  ...input(1), items: [
+    { ...line(1_000_000), lineSubtotal: 999999999990000, lineTotal: 999999999990000 },
+    { ...line(1), lineSubtotal: 0.01, lineTotal: 0.01 },
+  ],
+});
+assert.equal(created.totalAmount.toFixed(), "999999999990000.01");
+assert.equal(created.items.create[1].lineTotal.toFixed(), "0.01");
 existing={id:"immutable-order",items:[],fulfillments:[]};assert.equal((await orders.createEnterpriseDirectSalesOrder("tenant","actor",input("0.0000001"))).idempotent,true);
 quote={id:"quote",status:"CONVERTED",convertedOrderId:existing.id};assert.equal((await quotes.convertEnterpriseQuoteToOrder("tenant","quote","actor",1)).id,existing.id);
 for(const scale of [undefined,-1,7,1.5]){assert.equal(step(scale),undefined);assert.equal(valid("1",scale),false);}

@@ -1,6 +1,7 @@
 import { resolveSalesQuantitiesTx } from "@/lib/enterprise/crm-sales/quantity";
 import { createHash } from "node:crypto";
 import { Prisma } from "@prisma/client";
+import { money, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { EnterpriseDomainError } from "@/lib/enterprise/common/errors";
 import { assertActiveClientOrganization, publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { prisma } from "@/lib/prisma";
@@ -53,10 +54,16 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
 
     const quantities = await resolveSalesQuantitiesTx(tx, organizationId, input.items);
 
-    const subtotalAmount = input.items.reduce((sum, item) => sum + item.lineSubtotal, 0);
-    const discountAmount = input.items.reduce((sum, item) => sum + item.discountAmount, 0);
-    const taxAmount = input.items.reduce((sum, item) => sum + item.taxAmount, 0);
-    const totalAmount = input.items.reduce((sum, item) => sum + item.lineTotal, 0);
+    const monetaryLines = input.items.map(item => ({
+      lineSubtotal: money(item.lineSubtotal, 2),
+      discountAmount: money(item.discountAmount, 2),
+      taxAmount: money(item.taxAmount, 2),
+      lineTotal: money(item.lineTotal, 2),
+    }));
+    const subtotalAmount = sumDecimals(monetaryLines.map(item => item.lineSubtotal));
+    const discountAmount = sumDecimals(monetaryLines.map(item => item.discountAmount));
+    const taxAmount = sumDecimals(monetaryLines.map(item => item.taxAmount));
+    const totalAmount = sumDecimals(monetaryLines.map(item => item.lineTotal));
 
     const order = await tx.enterpriseSalesOrder.create({
       data: {
@@ -83,11 +90,8 @@ export async function createEnterpriseDirectSalesOrder(organizationId: string, a
             unitOfMeasureId: quantities[index].unitOfMeasureId,
             unitPrice: item.unitPrice,
             discountRate: 0,
-            discountAmount: item.discountAmount,
             taxRate: item.taxRatePercent,
-            taxAmount: item.taxAmount,
-            lineSubtotal: item.lineSubtotal,
-            lineTotal: item.lineTotal,
+            ...monetaryLines[index],
             sortOrder: index,
           })),
         },
