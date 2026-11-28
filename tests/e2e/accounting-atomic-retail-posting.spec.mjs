@@ -474,6 +474,17 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
     const fxReversePath = `/api/enterprise/${organizationId}/retail/mobile-money/fx/${fxId}/reverse`;
     const mobileReversePayload = { revision: mobile.body.transaction.revision, reason: "Annulation de recette Mobile Money" };
     const fxReversePayload = { revision: fx.body.transfer.revision, reason: "Annulation de recette du change" };
+    // Simulate a confirmed legacy record that predates atomic FX posting.
+    const { id, number, idempotencyKey, ...fxRecord } = await prisma.enterpriseMobileMoneyFxTransfer.findUniqueOrThrow({ where: { id: fxId } });
+    const legacyReference = `E2E-1229-FX-PENDING-${stamp}`;
+    const legacy = await prisma.enterpriseMobileMoneyFxTransfer.create({
+      data: { ...fxRecord, number: legacyReference, idempotencyKey: legacyReference },
+    });
+    const legacySource = { organizationId, sourceEntityType: "EnterpriseMobileMoneyFxTransfer", sourceEntityId: legacy.id };
+    const fxAccountingPath = `/api/enterprise/${organizationId}/retail/mobile-money/fx/${legacy.id}/accounting`;
+    const fxMovementsBefore = await prisma.enterpriseTreasuryTransaction.count({
+      where: { organizationId, financialAccountId: { in: [fixture.mobileCdfAccountId, fixture.mobileUsdAccountId] } },
+    });
 
     try {
       await prisma.enterpriseFiscalPeriod.update({
@@ -507,12 +518,36 @@ test.describe.serial("Accounting atomic Retail browser acceptance", () => {
       expect(await accountBalance(fixture.cashAccountId)).toBe(rollbackCashBefore);
       expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore);
       expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore);
+      const pending = await browserPost(page, fxAccountingPath, {});
+      expect(pending.status, JSON.stringify(pending.body)).toBe(202);
+      expect(pending.body).toMatchObject({ outcome: "PENDING", messageCode: "RETAIL_ACCOUNTING_PENDING_PERIOD_CLOSED", accounting: { status: "PENDING" } });
+      expect(await prisma.enterpriseJournalEntry.count({ where: legacySource })).toBe(0);
+      expect(await prisma.enterprisePostingBatch.findFirstOrThrow({ where: legacySource })).toMatchObject({
+        status: "FAILED", errorCode: pending.body.accounting.blockerCode,
+      });
     } finally {
       await prisma.enterpriseFiscalPeriod.update({
         where: { id: period.id },
         data: periodSnapshot,
       });
     }
+
+    const posted = await browserPost(page, fxAccountingPath, {});
+    expect(posted.status, JSON.stringify(posted.body)).toBe(200);
+    expect(posted.body.accounting).toMatchObject({ status: "POSTED", idempotent: false });
+    const recoveredEntry = await postedEntry(legacySource.sourceEntityType, legacy.id);
+    expect(recoveredEntry?.id).toBe(posted.body.accounting.journalEntryId);
+    expectBalanced(recoveredEntry, "Legacy Mobile Money FX recovery");
+    const replayedPosting = await browserPost(page, fxAccountingPath, {});
+    expect(replayedPosting.status, JSON.stringify(replayedPosting.body)).toBe(200);
+    expect(replayedPosting.body.accounting).toEqual({ ...posted.body.accounting, idempotent: true });
+    expect(await prisma.enterpriseJournalEntry.count({ where: legacySource })).toBe(1);
+    expect(await prisma.enterprisePostingBatch.findFirstOrThrow({ where: legacySource })).toMatchObject({ status: "COMPLETED", errorCode: null });
+    expect(await prisma.enterpriseTreasuryTransaction.count({
+      where: { organizationId, financialAccountId: { in: [fixture.mobileCdfAccountId, fixture.mobileUsdAccountId] } },
+    })).toBe(fxMovementsBefore);
+    expect(await accountBalance(fixture.mobileUsdAccountId)).toBe(rollbackFloatBefore);
+    expect(await accountBalance(fixture.mobileCdfAccountId)).toBe(rollbackCdfBefore);
 
     for (const [path, payload, sourceEntityType, sourceEntityId, responseKey] of [
       [mobileReversePath, mobileReversePayload, "EnterpriseMobileMoneyTransaction", mobileId, "transaction"],

@@ -46,7 +46,7 @@ forbidText("posting", postingTx, "prisma.$transaction", "postBusinessEventTx ne 
 requireText("provisioning", provisioning, "export async function ensureMobileMoneyTransactionLedgerMappingTx(", "le mapping wallet Mobile Money doit être réutilisable dans la transaction métier");
 requireText("provisioning", provisioning, "export async function ensureMobileMoneyFxLedgerMappingsTx(", "les mappings wallet FX doivent être réutilisables dans la transaction métier");
 requireText("provisioning", provisioning, "(tx) => ensureMobileMoneyTransactionLedgerMappingTx(tx, organizationId, actorUserId, transactionId)", "le wrapper Mobile Money historique doit déléguer à la primitive Tx");
-requireText("provisioning", provisioning, "(tx) => ensureMobileMoneyFxLedgerMappingsTx(tx, organizationId, actorUserId, transferId)", "le wrapper FX historique doit déléguer à la primitive Tx");
+forbidText("provisioning", provisioning, "export async function ensureMobileMoneyFxLedgerMappings(", "la reprise FX ne doit plus amorcer le mapping dans une transaction autonome");
 
 requireText("retail service", retailService, "async function createMobileMoneyTransactionTx(", "le cœur Mobile Money doit accepter un TransactionClient");
 requireText("retail service", retailService, "export async function createMobileMoneyTransactionWithPosting(", "le wrapper atomique Mobile Money manque");

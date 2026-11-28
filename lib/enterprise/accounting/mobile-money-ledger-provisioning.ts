@@ -227,14 +227,3 @@ export async function ensureMobileMoneyFxLedgerMappingsTx(
   });
   return { sourceLedgerAccountId: source.id, targetLedgerAccountId: target.id };
 }
-
-export async function ensureMobileMoneyFxLedgerMappings(
-  organizationId: string,
-  actorUserId: string,
-  transferId: string,
-) {
-  return prisma.$transaction(
-    (tx) => ensureMobileMoneyFxLedgerMappingsTx(tx, organizationId, actorUserId, transferId),
-    { isolationLevel: Prisma.TransactionIsolationLevel.Serializable, maxWait: 10000, timeout: 30000 },
-  );
-}

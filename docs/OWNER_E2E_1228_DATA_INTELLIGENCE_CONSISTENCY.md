@@ -72,6 +72,8 @@ Avec un adaptateur de recette, répéter en mode connecté. Pour une caisse hors
 
 Avec une caisse ouverte, confirmer un dépôt puis un change pendant une période comptable ouverte. Fermer la période de recette et vérifier qu’une contrepassation de chaque opération renvoie un refus. Comparer les statuts, révisions, soldes et écritures avant et après les deux refus. Rouvrir la période, contrepasser avec les mêmes révisions et vérifier les mouvements inverses et l’équilibre des écritures. Rejouer chaque contrepassation et vérifier que les écritures et mouvements restent uniques.
 
+Pour une conversion confirmée historiquement sans journal, cliquer sur **Finaliser la comptabilisation** pendant une période fermée. Vérifier le diagnostic de période et l’absence d’écriture. Rouvrir la période puis réessayer deux fois. Vérifier qu’une seule écriture équilibrée existe et que ni les mouvements ni les soldes des wallets n’ont varié.
+
 ### Mobile Money — reprise d’une confirmation fournisseur
 
 Avec un adaptateur de recette, obtenir une confirmation alors que la période comptable est fermée. Vérifier le statut 202 et le message « enregistrement en attente », le maintien de la référence fournisseur et l’absence de mouvement et d’écriture. Rouvrir la période et utiliser le rapprochement de la demande existante. Vérifier que le journal et les mouvements portent une seule fois sur la même opération et que la reprise conserve sa date de confirmation sans nouvel appel fournisseur.

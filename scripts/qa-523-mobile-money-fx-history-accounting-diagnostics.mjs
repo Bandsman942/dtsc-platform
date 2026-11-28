@@ -46,9 +46,10 @@ requireSource("fx", source.fx.includes('accounting: { status: "POSTED"') && sour
 requireSource("fx", !source.fx.includes("retailAccountingPendingDiagnostic") && !source.fx.includes("retailPendingOutcome("), "la création FX peut encore exposer un diagnostic PENDING post-commit au lieu de rollbacker atomiquement");
 requireSource("fx", source.fx.includes('retailErrorResponse(error, "MOBILE_MONEY_FX_CREATE_FAILED")'), "un échec atomique FX n'est pas renvoyé via l'enveloppe FAILURE canonique");
 
-requireSource("retry", source.retry.includes("finalizeMobileMoneyFxAccounting(organizationId, auth.session.userId, transfer.id)"), "la reprise ne réutilise pas le posting idempotent du transfert existant");
+requireSource("retry", source.retry.includes("finalizeMobileMoneyFxAccountingTx(tx, organizationId, auth.session.userId, transfer.id)") && source.retry.includes("isolationLevel: Prisma.TransactionIsolationLevel.Serializable"), "la reprise doit valider le périmètre et comptabiliser le transfert dans la même transaction");
 requireSource("retry", source.retry.includes("where: { ...scope, id: transferId, organizationId }") && source.retry.includes('mobileMoneyFxReadScope(tx, organizationId, auth.session.userId, "COLLECT_PAYMENT")'), "la reprise comptable n'est pas strictement tenant-scoped");
 requireSource("retry", source.retry.includes("retailAccountingPendingDiagnostic(error)"), "la reprise comptable perd le blocker réel");
+requireSource("retry", source.retry.includes("postingTarget = transfer") && source.retry.includes("if (!transfer) throw error") && source.retry.includes("recordPostingFailure(organizationId, auth.session.userId"), "la reprise doit conserver le diagnostic après rollback pour un transfert autorisé");
 requireSource("retry", source.retry.includes("retailPendingOutcome(diagnostic.messageCode"), "un échec de finalisation après transfert durable n'est pas conservé en PENDING");
 requireSource("retry", source.retry.includes("status: 202"), "la reprise encore bloquée ne renvoie pas HTTP 202");
 requireSource("retry", !source.retry.includes("createMobileMoneyFxTransfer"), "la reprise comptable ne doit jamais recréer/rejouer le transfert wallet");

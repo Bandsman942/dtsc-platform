@@ -313,7 +313,7 @@ export async function postBusinessEventTx(
   return { batch: completedBatch, entry, idempotent: false };
 }
 
-async function recordPostingFailure(
+export async function recordPostingFailure(
   organizationId: string,
   actorUserId: string,
   input: PostingInput,

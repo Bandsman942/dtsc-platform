@@ -1,6 +1,5 @@
 import type { Prisma } from "@prisma/client";
 import {
-  ensureMobileMoneyFxLedgerMappings,
   ensureMobileMoneyFxLedgerMappingsTx,
   ensureMobileMoneyTransactionLedgerMapping,
   ensureMobileMoneyTransactionLedgerMappingTx,
@@ -30,9 +29,9 @@ export async function finalizeMobileMoneyReversalAccountingTx(tx: Prisma.Transac
   });
 }
 
-export async function finalizeMobileMoneyFxAccounting(organizationId: string, actorUserId: string, transferId: string) {
-  await ensureMobileMoneyFxLedgerMappings(organizationId, actorUserId, transferId);
-  return postBusinessEvent(organizationId, actorUserId, {
+export async function finalizeMobileMoneyFxAccountingTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, transferId: string) {
+  await ensureMobileMoneyFxLedgerMappingsTx(tx, organizationId, actorUserId, transferId);
+  return postBusinessEventTx(tx, organizationId, actorUserId, {
     postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED",
     sourceEntityType: "EnterpriseMobileMoneyFxTransfer",
     sourceEntityId: transferId,
@@ -40,12 +39,7 @@ export async function finalizeMobileMoneyFxAccounting(organizationId: string, ac
 }
 
 export async function finalizeMobileMoneyFxReversalAccountingTx(tx: Prisma.TransactionClient, organizationId: string, actorUserId: string, transferId: string) {
-  await ensureMobileMoneyFxLedgerMappingsTx(tx, organizationId, actorUserId, transferId);
-  await postBusinessEventTx(tx, organizationId, actorUserId, {
-    postingEvent: "RETAIL_MOBILE_MONEY_FX_POSTED",
-    sourceEntityType: "EnterpriseMobileMoneyFxTransfer",
-    sourceEntityId: transferId,
-  });
+  await finalizeMobileMoneyFxAccountingTx(tx, organizationId, actorUserId, transferId);
   return postBusinessEventTx(tx, organizationId, actorUserId, {
     postingEvent: "RETAIL_MOBILE_MONEY_FX_REVERSED",
     sourceEntityType: "EnterpriseMobileMoneyFxTransfer",
