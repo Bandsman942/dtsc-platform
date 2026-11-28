@@ -16,7 +16,7 @@ class EnterpriseRetailError extends Error {
 }
 const state = {
   featureEnabled: true, revoked: false, inspectorRevoked: false, allowExtraStockCapability: false,
-  financeAllowed: true, reserved: [],
+  financeAllowed: true, reserved: [], stockUnitScale: 6,
   existing: false, created: null, saved: null, lines: [], review: null, events: [], operations: [],
   checkout: {
     id: "checkout-A", salesInvoiceId: "invoice-A", siteId: "store-A",
@@ -27,6 +27,11 @@ const state = {
   },
 };
 const tx = {
+  enterpriseInventoryItem: { findMany: async ({ where }) => {
+    assert.equal(where.organizationId, "tenant");
+    assert.ok(where.id.in.includes("item-A"));
+    return [{ id: "item-A", catalogItem: { unitOfMeasure: { decimalScale: state.stockUnitScale, symbol: "kg" } } }];
+  } },
   enterpriseRetailConfiguration: {
     findUnique: async () => ({ settingsJson: { invoiceCheckoutEnabled: state.featureEnabled } }),
   },
@@ -102,8 +107,9 @@ const source = fs.readFileSync("lib/enterprise/retail/invoice-returns.ts", "utf8
 const returnUi = fs.readFileSync("components/enterprise/professional/retail-invoice-return-dialog.tsx", "utf8");
 const retailErrors = fs.readFileSync("lib/enterprise/retail/http.ts", "utf8");
 assert.match(retailErrors, /RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION: "La quantité/);
-assert.match(returnUi, /step=\{line\.inventoryItemId \? "0\.001" : "0\.000001"\}/);
-assert.match(returnUi, /line\.hasStock && !\/\^/);
+assert.match(returnUi, /inventoryQuantityStep\(line\.decimalScale\)/);
+assert.match(returnUi, /isInventoryQuantityInputValid\(batch\.quantity, line\.decimalScale\)/);
+assert.match(returnUi, /sum !== inventoryQuantityMicrounits\(line\.quantity\)/);
 const unit = { exports: {} };
 vm.runInNewContext(ts.transpileModule(source, {
   compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
@@ -111,6 +117,7 @@ vm.runInNewContext(ts.transpileModule(source, {
   module: unit, exports: unit.exports, Promise, Date, Set, Map,
   require: (id) => {
     if (id === "@/lib/enterprise/inventory/lot-allocation") return lotTools.exports;
+    if (id === "@/lib/enterprise/inventory/quantity-policy") return qaQuantityPolicy;
     if (id === "@prisma/client") return { Prisma };
     if (id === "zod") return { z: require("zod").z };
     if (id === "@/lib/prisma") return { prisma };
@@ -242,6 +249,20 @@ assert.equal(unfulfilled.request.lines[0].stockDisposition, "UNDELIVERED_CREDIT"
 assert.equal(unfulfilled.request.status, "SUBMITTED");
 state.checkout.invoice = originalInvoice;
 state.checkout.stockPostedAt = new Date();
+state.saved = originalSaved; state.created = originalCreated; state.lines = originalLines;
+state.operations.length = operationsBeforeUnfulfilled;
+state.events.length = eventsBeforeUnfulfilled;
+state.stockUnitScale = 0;
+await assert.rejects(createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
+  ...input, idempotencyKey: "shop-return-stock-unit-001",
+  lines: [{ ...input.lines[0], quantity: "0.5" }],
+}), { code: "RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION" });
+state.stockUnitScale = 6;
+const sixPlaces = await createRetailInvoiceReturnRequest("tenant", "invoice-A", "requester", {
+  ...input, idempotencyKey: "shop-return-valid-micro-001",
+  lines: [{ ...input.lines[0], quantity: "0.123456" }],
+});
+assert.equal(sixPlaces.request.lines[0].quantity.toFixed(), "0.123456");
 state.saved = originalSaved; state.created = originalCreated; state.lines = originalLines;
 state.operations.length = operationsBeforeUnfulfilled;
 state.events.length = eventsBeforeUnfulfilled;

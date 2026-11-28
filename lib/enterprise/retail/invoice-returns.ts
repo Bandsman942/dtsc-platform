@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { Prisma } from "@prisma/client";
 import { readPhysicalReturnLots, planPhysicalInvoiceReturnLots } from "@/lib/enterprise/inventory/lot-allocation";
+import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 
 // @prisma/client Decimal does not expose the static Decimal.min/max helpers.
 const decimalMin = (...values: Prisma.Decimal[]): Prisma.Decimal => values.reduce((a, b) => a.lessThan(b) ? a : b);
@@ -50,6 +51,20 @@ export const retailInvoiceReturnInspectionSchema = z.object({
 type RequestInput = z.infer<typeof retailInvoiceReturnRequestSchema>;
 type DecisionInput = z.infer<typeof retailInvoiceReturnDecisionSchema>;
 type InspectionInput = z.infer<typeof retailInvoiceReturnInspectionSchema>;
+
+async function readReturnStockUnits(
+  db: Pick<Prisma.TransactionClient, "enterpriseInventoryItem">,
+  organizationId: string,
+  lines: ReadonlyArray<{ inventoryItemId: string | null }>,
+) {
+  const ids = [...new Set(lines.flatMap(line => line.inventoryItemId ? [line.inventoryItemId] : []))];
+  if (!ids.length) return new Map<string, { decimalScale: number; symbol: string | null }>();
+  const items = await db.enterpriseInventoryItem.findMany({
+    where: { organizationId, id: { in: ids } },
+    select: { id: true, catalogItem: { select: { unitOfMeasure: { select: { decimalScale: true, symbol: true } } } } },
+  });
+  return new Map(items.map(item => [item.id, item.catalogItem.unitOfMeasure]));
+}
 
 function monetary(value: Prisma.Decimal.Value) {
   return new Prisma.Decimal(value).toDecimalPlaces(6, Prisma.Decimal.ROUND_HALF_UP);
@@ -144,7 +159,7 @@ export async function listRetailInvoiceReturnRequests(
     organizationId, actorUserId, checkout.siteId, "VIEW_SALES", prisma, { requireAssignment: true },
   );
   const where = { organizationId, checkoutId: checkout.id };
-  const [items, total, member, siteAssignment] = await Promise.all([
+  const [items, total, member, siteAssignment, stockUnits] = await Promise.all([
     prisma.enterpriseRetailInvoiceReturnRequest.findMany({
       where, orderBy: { createdAt: "desc" }, skip: (page - 1) * 25, take: 25,
       select: {
@@ -168,6 +183,7 @@ export async function listRetailInvoiceReturnRequests(
       where: { organizationId_siteId_userId: { organizationId, siteId: checkout.siteId, userId: actorUserId } },
       select: { isActive: true, roleCode: true, permissionsJson: true },
     }),
+    readReturnStockUnits(prisma, organizationId, checkout.lines),
   ]);
   const batchOptions: Record<string, Array<{ stockLotId: string; lotNumber: string; quantityIssued: string; quantityAvailable: string }>> = {};
   const splitLines = checkout.stockPostedAt ? (checkout.lines || []).filter(line => line.lotAllocations != null) : [];
@@ -180,11 +196,13 @@ export async function listRetailInvoiceReturnRequests(
     for (const line of splitLines) {
       const previous = committed.filter(row => row.checkoutLineId === line.id && row.stockDisposition !== "UNDELIVERED_CREDIT").flatMap(row => readPhysicalReturnLots(row.lotAllocations, row.quantity));
       const quantities = new Map<string, Prisma.Decimal>();
-      for (const issue of issues.filter(row => row.sourceLineId === line.invoiceItemId && row.inventoryItemId === line.inventoryItemId && row.warehouseId === checkout.warehouseId && row.stockLotId)) quantities.set(issue.stockLotId!, (quantities.get(issue.stockLotId!) || new Prisma.Decimal(0)).plus(issue.quantity));
+      for (const issue of issues.filter(row => row.sourceLineId === line.invoiceItemId && row.inventoryItemId === line.inventoryItemId && row.warehouseId === checkout.warehouseId && row.stockLotId)) {
+        quantities.set(issue.stockLotId!, exactInventoryQuantity(quantities.get(issue.stockLotId!) ?? 0).plus(issue.quantity));
+      }
       batchOptions[line.id] = [...quantities].flatMap(([stockLotId, issued]) => {
         const lot = lots.find(row => row.id === stockLotId && row.inventoryItemId === line.inventoryItemId);
         if (!lot) return [];
-        const used = previous.filter(row => row.stockLotId === stockLotId).reduce((sum,row) => sum.plus(row.quantity), new Prisma.Decimal(0));
+        const used = previous.filter(row => row.stockLotId === stockLotId).reduce((sum,row) => sum.plus(row.quantity), exactInventoryQuantity(0));
         return [{ stockLotId, lotNumber: lot.lotNumber, quantityIssued: issued.toFixed(), quantityAvailable: issued.gt(used) ? issued.minus(used).toFixed() : "0" }];
       });
     }
@@ -342,6 +360,10 @@ export async function listRetailInvoiceReturnRequests(
         (item.inspectedByUserId !== actorUserId || sameActorDecision),
     }; }),
     batchOptions,
+    stockUnits: Object.fromEntries(checkout.lines.flatMap(line => {
+      const unit = line.inventoryItemId && stockUnits.get(line.inventoryItemId);
+      return unit ? [[line.id, unit] as const] : [];
+    })),
     stockPostedAt: Boolean(checkout.stockPostedAt),
     canRequest: capabilities.canRequest && ["PAID", "CREDIT_NOTE", "PARTIALLY_PAID", "ISSUED", "OVERDUE"].includes(checkout.invoice.status) &&
       checkout.invoice.amountPaid.plus(checkout.invoice.amountCredited).plus(checkout.invoice.outstandingAmount).equals(checkout.invoice.grandTotal),
@@ -450,6 +472,7 @@ export async function createRetailInvoiceReturnRequest(
     if (lineIds.some((id) => !source.has(id))) {
       throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_LINE_INVALID", 409);
     }
+    const stockUnits = await readReturnStockUnits(tx, organizationId, lineIds.map(id => source.get(id)!));
     const committed = await tx.enterpriseRetailInvoiceReturnLine.findMany({
       where: {
         organizationId, checkoutId: checkout.id, checkoutLineId: { in: lineIds },
@@ -467,7 +490,7 @@ export async function createRetailInvoiceReturnRequest(
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_HISTORICAL_PRECISION_UNSUPPORTED", 409);
       }
       previousQuantity.set(row.checkoutLineId,
-        (previousQuantity.get(row.checkoutLineId) || new Prisma.Decimal(0)).plus(row.quantity));
+        exactInventoryQuantity(previousQuantity.get(row.checkoutLineId) ?? 0).plus(row.quantity));
       previousAmount.set(row.checkoutLineId,
         (previousAmount.get(row.checkoutLineId) || new Prisma.Decimal(0)).plus(row.refundAmount));
       previousNet.set(row.checkoutLineId,
@@ -477,7 +500,16 @@ export async function createRetailInvoiceReturnRequest(
     }
     const prepared = await Promise.all(input.lines.map(async (entry) => {
       const line = source.get(entry.checkoutLineId)!;
-      const value = new Prisma.Decimal(entry.quantity);
+      const value = exactInventoryQuantity(entry.quantity);
+      // Historic checkouts may have no surviving catalog proof. Keep the
+      // six-place ledger limit for those requests and preserve their history.
+      const stockUnit = line.inventoryItemId && stockUnits.get(line.inventoryItemId);
+      if (line.inventoryItemId) {
+        const scale = stockUnit ? stockUnit.decimalScale : 6;
+        if (value.decimalPlaces() > scale || entry.lotAllocations?.some(batch => new Prisma.Decimal(batch.quantity).decimalPlaces() > scale)) {
+          throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
+        }
+      }
       let batchSelection: ReturnType<typeof readPhysicalReturnLots> | null = null;
       if (checkout.stockPostedAt && line.lotAllocations != null) {
         const related = await tx.enterpriseStockMovement.findMany({ where: { organizationId, sourceEntityType: "EnterpriseSalesInvoice", sourceEntityId: invoiceId, sourceLineId: line.invoiceItemId, direction: "OUT", movementType: "SALE_FULFILLMENT" }, orderBy: [{ createdAt: "asc" }, { id: "asc" }] });
@@ -493,14 +525,9 @@ export async function createRetailInvoiceReturnRequest(
       const priorAmount = previousAmount.get(line.id) || new Prisma.Decimal(0);
       const priorNet = previousNet.get(line.id) || new Prisma.Decimal(0);
       const priorTax = previousTax.get(line.id) || new Prisma.Decimal(0);
-      const left = line.invoiceItem.quantity.minus(priorQty);
+      const left = exactInventoryQuantity(line.invoiceItem.quantity).minus(priorQty);
       if (!value.greaterThan(0) || value.greaterThan(left)) {
         throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_QUANTITY_EXCEEDED", 409);
-      }
-      // Both invoice and physical ledgers preserve six places after #1228.
-      // A physical return must remain representable without silent rounding.
-      if (line.inventoryItemId && value.decimalPlaces() > 6) {
-        throw new EnterpriseRetailError("RETAIL_INVOICE_RETURN_STOCK_QUANTITY_PRECISION", 409);
       }
       // Never report a phantom physical return or put goods back in stock
       // if their original invoice has not yet posted a sale-fulfilment exit.
