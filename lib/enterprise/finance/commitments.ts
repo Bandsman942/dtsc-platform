@@ -9,6 +9,29 @@ function nonNegative(value: Prisma.Decimal) {
   return value.isNegative() ? enterpriseMoneyZero() : enterpriseMoney(value);
 }
 
+const ExactBudgetAmount = Prisma.Decimal.clone({ precision: 48 });
+
+type BudgetCommitmentAmounts = {
+  committedAmount: Prisma.Decimal | null;
+  realizedAmount: Prisma.Decimal | null;
+  releasedAmount: Prisma.Decimal | null;
+};
+
+function calculateBudgetLinePosition(
+  plannedAmount: Prisma.Decimal,
+  commitments?: BudgetCommitmentAmounts,
+  approvedExpenseAmount?: Prisma.Decimal | null,
+) {
+  const committed = enterpriseMoney(commitments?.committedAmount ?? 0);
+  const realizedFromCommitments = enterpriseMoney(commitments?.realizedAmount ?? 0);
+  const released = enterpriseMoney(commitments?.releasedAmount ?? 0);
+  const remainingCommitment = nonNegative(new ExactBudgetAmount(committed).sub(realizedFromCommitments).sub(released));
+  const actualAmount = enterpriseMoney(approvedExpenseAmount ?? 0);
+  const planned = new ExactBudgetAmount(enterpriseMoney(plannedAmount));
+  const available = enterpriseMoney(planned.sub(remainingCommitment).sub(actualAmount));
+  return { planned, committed, realizedFromCommitments, released, remainingCommitment, actual: actualAmount, available };
+}
+
 export async function getBudgetLinePosition(tx: FinanceTransaction, organizationId: string, budgetLineId: string) {
   const line = await tx.enterpriseBudgetLine.findFirst({
     where: { id: budgetLineId, organizationId },
@@ -27,24 +50,7 @@ export async function getBudgetLinePosition(tx: FinanceTransaction, organization
     }),
   ]);
 
-  const committed = enterpriseMoney(commitments._sum.committedAmount || 0);
-  const realizedFromCommitments = enterpriseMoney(commitments._sum.realizedAmount || 0);
-  const released = enterpriseMoney(commitments._sum.releasedAmount || 0);
-  const remainingCommitment = nonNegative(committed.sub(realizedFromCommitments).sub(released));
-  const actualAmount = enterpriseMoney(actual._sum.amount || 0);
-  const planned = enterpriseMoney(line.plannedAmount);
-  const available = enterpriseMoney(planned.sub(remainingCommitment).sub(actualAmount));
-
-  return {
-    line,
-    planned,
-    committed,
-    realizedFromCommitments,
-    released,
-    remainingCommitment,
-    actual: actualAmount,
-    available,
-  };
+  return { line, ...calculateBudgetLinePosition(line.plannedAmount, commitments._sum, actual._sum.amount) };
 }
 
 export async function getBudgetPosition(tx: FinanceTransaction, organizationId: string, budgetId: string) {
@@ -54,11 +60,55 @@ export async function getBudgetPosition(tx: FinanceTransaction, organizationId: 
   return {
     budget,
     lines: positions,
-    planned: positions.reduce((sum, item) => sum.add(item.planned), enterpriseMoneyZero()).toDecimalPlaces(2),
-    committedRemaining: positions.reduce((sum, item) => sum.add(item.remainingCommitment), enterpriseMoneyZero()).toDecimalPlaces(2),
-    actual: positions.reduce((sum, item) => sum.add(item.actual), enterpriseMoneyZero()).toDecimalPlaces(2),
-    available: positions.reduce((sum, item) => sum.add(item.available), enterpriseMoneyZero()).toDecimalPlaces(2),
+    planned: positions.reduce((sum, item) => sum.add(item.planned), new ExactBudgetAmount(0)).toDecimalPlaces(2),
+    committedRemaining: positions.reduce((sum, item) => sum.add(item.remainingCommitment), new ExactBudgetAmount(0)).toDecimalPlaces(2),
+    actual: positions.reduce((sum, item) => sum.add(item.actual), new ExactBudgetAmount(0)).toDecimalPlaces(2),
+    available: positions.reduce((sum, item) => sum.add(item.available), new ExactBudgetAmount(0)).toDecimalPlaces(2),
   };
+}
+
+/**
+ * Read positions for the authorized page in groups. Clamp the remaining
+ * commitment of each budget line separately, as on the budget detail.
+ */
+export async function getBudgetRegisterPositions(tx: FinanceTransaction, organizationId: string, budgetIds: string[]) {
+  const positions = new Map(budgetIds.map(id => [id, {
+    planned: new ExactBudgetAmount(0),
+    committedRemaining: new ExactBudgetAmount(0),
+    actual: new ExactBudgetAmount(0),
+    available: new ExactBudgetAmount(0),
+    lineCount: 0,
+  }]));
+  if (!positions.size) return positions;
+
+  const lineScope: Prisma.EnterpriseBudgetLineWhereInput = {
+    organizationId, budgetId: { in: budgetIds }, budget: { archivedAt: null },
+  };
+  const [lines, commitments, expenses] = await Promise.all([
+    tx.enterpriseBudgetLine.findMany({ where: lineScope, select: { id: true, budgetId: true, plannedAmount: true } }),
+    tx.enterpriseBudgetCommitment.groupBy({
+      by: ["budgetLineId"],
+      where: { organizationId, budgetLine: lineScope },
+      _sum: { committedAmount: true, realizedAmount: true, releasedAmount: true },
+    }),
+    tx.enterpriseExpense.groupBy({
+      by: ["budgetLineId"],
+      where: { organizationId, budgetLine: lineScope, status: "APPROVED", archivedAt: null },
+      _sum: { amount: true },
+    }),
+  ]);
+  const commitsByLine = new Map(commitments.map(item => [item.budgetLineId, item._sum]));
+  const expensesByLine = new Map(expenses.map(item => [item.budgetLineId, item._sum.amount]));
+  for (const line of lines) {
+    const amounts = calculateBudgetLinePosition(line.plannedAmount, commitsByLine.get(line.id), expensesByLine.get(line.id));
+    const budget = positions.get(line.budgetId)!;
+    budget.planned = budget.planned.plus(amounts.planned);
+    budget.committedRemaining = budget.committedRemaining.plus(amounts.remainingCommitment);
+    budget.actual = budget.actual.plus(amounts.actual);
+    budget.available = budget.available.plus(amounts.available);
+    budget.lineCount++;
+  }
+  return positions;
 }
 
 export async function createPurchaseBudgetCommitment(

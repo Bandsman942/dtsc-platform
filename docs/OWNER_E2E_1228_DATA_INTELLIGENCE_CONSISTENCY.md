@@ -91,3 +91,7 @@ Ouvrir **Trésorerie → Historique** et sélectionner un compte ou un wallet et
 ### Facturation médicale — registre et exports
 
 Dans une clinique de recette, préparer au moins 51 factures en CDF et USD, dont des factures de même date, de statuts différents et une facture hors période. Rechercher successivement un numéro de facture, un patient et son numéro. Filtrer par statut et dates, puis changer de page. Le sous-total filtré reste stable et le total de la page évolue. Comparer les trois montants par devise dans l’écran et les exports CSV, Excel et PDF. Vérifier qu’aucun nom, numéro de patient ou note interne ne figure dans le rapport, et qu’un lecteur dépourvu du droit d’export ne peut pas appeler l’extraction. Répéter depuis une autre organisation.
+
+### Budgets — scénarios et versions
+
+Préparer des budgets de base sur deux pages, une révision de version 2, un autre scénario et deux devises. Ajouter une dépense approuvée et un engagement partiellement libéré à deux lignes distinctes. Rechercher les budgets de base. Vérifier que les totaux filtrés sont stables au changement de page, que le sous-total de la page évolue et que les deux versions sont lisibles séparément. Comparer l’écran, la fiche budget et les exports. Ajouter un budget sans prévision dans un groupe et vérifier que ce groupe ne présente plus de total de prévision.

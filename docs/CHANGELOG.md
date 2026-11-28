@@ -1,5 +1,6 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- Budgets. Les totaux du registre et des exports distinguent la devise, le statut, le scénario et la version. Les positions affichées reprennent les engagements restants et les dépenses approuvées du détail.
 - Facturation médicale. Recherche, dates et statuts filtrés côté serveur. Montants séparés par devise et statut sur toutes les pages, et exports du registre limités aux colonnes financières autorisées.
 - Devis et commandes directes. Calcul décimal des montants et cohérence entre les montants des lignes et ceux du document, y compris lorsqu’un centime suit une ligne de montant élevé.
 - SYSCOHADA. Empreinte de l’édition signée et aperçu du candidat marchandises dans la mise en service comptable. La comparaison indique les conflits de codes et l’historique comptabilisé ou contrepassé de l’entreprise.

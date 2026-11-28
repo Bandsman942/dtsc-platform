@@ -8,6 +8,7 @@ import { financeStatusLabel } from "@/components/enterprise/professional/finance
 import { professionalErpEnumLabel } from "@/components/enterprise/professional/professional-erp-i18n";
 import { Input } from "@/components/ui/input";
 import { notifyToast } from "@/lib/client-toast";
+import { formatEnterpriseBusinessDate } from "@/lib/enterprise/business-context";
 import { customerFacingStatusLabel } from "@/lib/customer-facing-language";
 import { customerFacingMobileMoneyTransactionType } from "@/lib/retail-customer-language";
 import { downloadProfessionalCsv, downloadProfessionalPdf, downloadProfessionalXlsx, type ProfessionalReportExportModel } from "@/lib/reporting/professional-export";
@@ -46,7 +47,7 @@ export function FinanceDateFilter({ locale, from, to, onChange, disabledReason, 
     if (next === "week") {
       const date = new Date(`${today}T00:00:00.000Z`);
       date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
-      const start = date.toISOString().slice(0, 10);
+      const start = formatEnterpriseBusinessDate(date, "UTC");
       onChange(start, today);
     }
     if (next === "month") onChange(`${today.slice(0, 7)}-01`, today);
@@ -107,6 +108,11 @@ const filteredMetricLabels = {
   mobileMoneyFloatEffect: { fr: "Effet float enregistré", en: "Recorded float effect" },
   mobileMoneyFxSource: { fr: "Montant source converti", en: "Converted source amount" },
   mobileMoneyFxTarget: { fr: "Montant cible enregistré", en: "Recorded target amount" },
+  budgetPlanned: { fr: "Planifié", en: "Planned" },
+  budgetCommitted: { fr: "Engagement restant", en: "Remaining commitment" },
+  budgetActual: { fr: "Réalisé", en: "Actual" },
+  budgetAvailable: { fr: "Disponible", en: "Available" },
+  budgetForecast: { fr: "Prévision", en: "Forecast" },
   assetOriginalCost: { fr: "Coût d’acquisition", en: "Acquisition cost" },
   assetDepreciation: { fr: "Amortissements comptabilisés", en: "Posted depreciation" },
   assetNetBookValue: { fr: "Valeur nette comptable", en: "Net book value" },
@@ -117,7 +123,12 @@ function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale, statusLa
       : row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status)
         : (row.metric.startsWith("telco") || row.metric.startsWith("mobileMoney")) ? customerFacingStatusLabel(row.status, locale) : financeStatusLabel(row.status, locale))
     : "";
-  return [filteredMetricLabels[row.metric][locale], row.operationType ? customerFacingMobileMoneyTransactionType(row.operationType, locale) : "", row.currencyPair, status, row.currencyCode].filter(Boolean).join(" · ");
+  const scenario = row.budgetScenario && statusLabel ? statusLabel(row.budgetScenario) : "";
+  const version = row.budgetVersion === undefined ? "" : `Version ${row.budgetVersion}`;
+  return [
+    filteredMetricLabels[row.metric][locale], row.operationType ? customerFacingMobileMoneyTransactionType(row.operationType, locale) : "",
+    row.currencyPair, status, scenario, version, row.currencyCode,
+  ].filter(Boolean).join(" · ");
 }
 
 export function formatAnalyticsAmount(row: Pick<FinanceFilteredTotal, "amount" | "currencyCode">, locale: Locale) {
@@ -143,7 +154,7 @@ export function FinanceFilteredTotals({ rows, locale, scope = "filtered", status
   const label = scope === "general" ? (locale === "fr" ? "Totaux généraux autorisés (sans filtres)" : "Authorized general totals (without filters)")
     : scope === "page" ? (locale === "fr" ? "Sous-totaux de la page affichée" : "Displayed page subtotals")
     : locale === "fr" ? "Sous-totaux filtrés (toutes pages)" : "Filtered subtotals (all pages)";
-  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.operationType,row.currencyPair,row.status,row.currencyCode].join(":")} label={filteredMetricLabel(row, locale, statusLabel)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
+  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.operationType,row.currencyPair,row.status,row.currencyCode,row.budgetScenario,row.budgetVersion].join(":")} label={filteredMetricLabel(row, locale, statusLabel)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
 }
 
 /** Keep all three scopes explicit; currencies and document statuses never mix. */
@@ -205,8 +216,8 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
       if (total > 1000 || pages > 200) throw new Error(tr(`Le résultat contient ${total} lignes. Affinez les dates ou la recherche (limite de 1 000 lignes par export).`, `There are ${total} rows. Narrow the date or search filters (1,000 rows per export).`));
       const all = [...body.items];
       const summarySignature = (value: AnalyticalExportTotals) => JSON.stringify([
-        ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.amount])),
-        ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.amount])),
+        ...(value.filteredTotals || []).map(row=>JSON.stringify(["filtered",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.budgetScenario||"",row.budgetVersion??"",row.amount])),
+        ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.budgetScenario||"",row.budgetVersion??"",row.amount])),
         ...(value.physicalTotals || []).map(row=>JSON.stringify(["physical",row.unitId,row.unit,row.value,row.precisionMismatch])),
         ...(value.metrics?.treasuryBalanceAt ? [JSON.stringify(value.metrics.treasuryBalanceAt)] : []),
         ...(value.metrics?.assetValuationUnavailableScopes || []).filter(scope => scope !== "pageTotals"),

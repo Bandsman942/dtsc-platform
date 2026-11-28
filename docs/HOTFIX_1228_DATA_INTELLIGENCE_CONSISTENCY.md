@@ -320,3 +320,11 @@ Contrôles exécutés sur données de recette. La fixture PostgreSQL couvre 52 r
 ### Devis et commandes directes — calcul des montants
 
 Le calcul des devis utilise les quantités validées par le catalogue, ainsi que la précision enregistrée du prix unitaire et des taux de remise et de taxe. Les montants du devis et de la commande directe additionnent les lignes en décimal, à leur précision de stockage. La conversion de devis reprend les montants déjà enregistrés. Le scénario ciblé vérifie la conservation d’un centime en présence d’une ligne à 999 999 999 990 000,00, ainsi que la cohérence du prix, de la remise et de la taxe d’une ligne. Les conversions d’unités avec facteur dans les documents d’achat et de vente restent à raccorder.
+
+### Budgets — positions et totaux du registre
+
+Le registre calcule la position des lignes avec la même règle que la fiche budget. Les lignes, engagements restants et dépenses approuvées sont lus par lots dans le même instantané que le registre. Les montants planifiés, engagés, réalisés et disponibles distinguent le filtré toutes pages, le général autorisé et la page affichée. La présentation regroupe les totaux par devise, statut, scénario et version. Une prévision totale exige une prévision renseignée pour chaque budget du groupe. Les rapports professionnels reprennent les regroupements du registre.
+
+La fixture PostgreSQL vérifie 52 budgets d’une même version sur plusieurs lots, un budget révisé, un autre scénario en CDF et une autre entreprise. Elle compare la position du registre à la fiche et vérifie le traitement des engagements libérés et des dépenses en brouillon ou archivées.
+
+Le filtre de dates partagé passe par le formateur de dates métier pour afficher le début de semaine calculé depuis la date civile. Le contrôle #670 continue de signaler les conversions directes d’un instant UTC en libellé de date métier.

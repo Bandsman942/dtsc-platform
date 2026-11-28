@@ -1289,6 +1289,87 @@ const { GET: getProjects } = workflowTestLoader({
   "@/lib/rate-limit": {},
 })("@/app/api/enterprise/[organizationId]/projects/route");
 
+async function verifyBudgetRegisterPositions(tenant, otherTenant, actor) {
+  const load = workflowTestLoader({
+    "@/lib/enterprise/workflows/domain-events": {},
+  });
+  const { getBudgetRegisterPositions, getBudgetPosition } = load("@/lib/enterprise/finance/commitments");
+  const { budgetRegisterPageTotals, budgetRegisterTotals } = load("@/lib/enterprise/finance/budget-register-analytics");
+
+  await assert.rejects(db.$transaction(async tx => {
+    await tx.organization.createMany({ data: [tenant, otherTenant].map(id => ({ id, name: id, status: "ACTIVE" })) });
+    const repeated = Array.from({ length: 51 }, (_, index) => ({
+      id: `${tenant}-extra-${index}`, organizationId: tenant, reference: `QA-EXTRA-${index}`, title: "Other base budget",
+      currency: "USD", forecastAmount: index === 0 ? null : "1.01",
+    }));
+    const budgets = [
+      { id: `${tenant}-base`, organizationId: tenant, reference: "QA-BASE", title: "Base", currency: "USD", forecastAmount: "135.00" },
+      { id: `${tenant}-new`, organizationId: tenant, reference: "QA-NEW", title: "Revision", currency: "USD", forecastAmount: "600.06", scenarioCode: "BASE", versionNumber: 2, parentBudgetId: `${tenant}-base` },
+      { id: `${tenant}-empty`, organizationId: tenant, reference: "QA-ALT", title: "Other scenario", currency: "CDF", scenarioCode: "OPTIMISTIC" },
+      { id: `${otherTenant}-base`, organizationId: otherTenant, reference: "QA-BASE", title: "Other tenant", currency: "EUR" },
+    ];
+    await tx.enterpriseBudget.createMany({ data: [...budgets, ...repeated].map(item => ({
+      ...item, periodStart: new Date("2026-01-01"), periodEnd: new Date("2026-12-31"), createdByUserId: actor,
+    })) });
+    const lines = [
+      { id: `${tenant}-a`, organizationId: tenant, budgetId: budgets[0].id, plannedAmount: "100" },
+      { id: `${tenant}-b`, organizationId: tenant, budgetId: budgets[0].id, plannedAmount: "32.12" },
+      { id: `${tenant}-c`, organizationId: tenant, budgetId: budgets[1].id, plannedAmount: "500.01" },
+      { id: `${otherTenant}-a`, organizationId: otherTenant, budgetId: budgets[3].id, plannedAmount: "700.33" },
+    ];
+    await tx.enterpriseBudgetLine.createMany({ data: [
+      ...lines,
+      ...repeated.map(budget => ({ organizationId: tenant, budgetId: budget.id, plannedAmount: "1.01" })),
+    ].map(item => ({ ...item, name: "Budget line" })) });
+    await tx.enterpriseBudgetCommitment.createMany({ data: [
+      { organizationId: tenant, budgetLineId: lines[0].id, sourceEntityId: "first", committedAmount: "10", releasedAmount: "14" },
+      { organizationId: tenant, budgetLineId: lines[1].id, sourceEntityId: "second", committedAmount: "8.05", realizedAmount: "2", releasedAmount: "1" },
+    ].map(item => ({ ...item, sourceEntityType: "EnterprisePurchase" })) });
+    await tx.enterpriseExpense.createMany({ data: [
+      { reference: "QA-1", budgetLineId: lines[0].id, amount: "7", status: "APPROVED" },
+      { reference: "QA-2", budgetLineId: lines[1].id, amount: "3.05", status: "APPROVED" },
+      { reference: "QA-3", budgetLineId: lines[1].id, amount: "400", status: "DRAFT" },
+      { reference: "QA-4", budgetLineId: lines[1].id, amount: "900", status: "APPROVED", archivedAt: new Date("2026-03-01") },
+    ].map(item => ({
+      ...item, title: "Budget expense", organizationId: tenant, currency: "USD", expenseDate: new Date("2026-01-02"),
+      createdByUserId: actor, requestedByUserId: actor,
+    })) });
+
+    const positions = await getBudgetRegisterPositions(tx, tenant, budgets.map(budget => budget.id));
+    const first = positions.get(budgets[0].id);
+    const detail = await getBudgetPosition(tx, tenant, budgets[0].id);
+    const keys = ["planned", "committedRemaining", "actual", "available"];
+    assert.deepEqual(keys.map(key => first[key].toFixed()), keys.map(key => detail[key].toFixed()));
+    assert.deepEqual(keys.map(key => first[key].toFixed()), ["132.12", "5.05", "10.05", "117.02"]);
+    assert.equal(first.lineCount, 2);
+    assert.equal(positions.get(budgets[1].id).available.toFixed(), "500.01");
+    assert.equal(positions.get(budgets[2].id).lineCount, 0);
+    assert.equal(positions.get(budgets[3].id).planned.toFixed(), "0");
+    assert.equal((await getBudgetRegisterPositions(tx, tenant, [])).size, 0);
+    const general = await budgetRegisterTotals(tx, tenant, { archivedAt: null });
+    const filtered = await budgetRegisterTotals(tx, tenant, { archivedAt: null, reference: { startsWith: "QA-EXTRA-" } });
+    const page = await tx.enterpriseBudget.findMany({ where: { organizationId: tenant, id: budgets[0].id } });
+    const currentPage = budgetRegisterPageTotals(page, positions);
+    const value = (groups, metric, currencyCode, version = 1) => groups.find(row =>
+      row.metric === metric && row.currencyCode === currencyCode && row.budgetVersion === version)?.amount;
+    assert.equal(value(filtered, "budgetPlanned", "USD"), "51.51");
+    assert.equal(value(general, "budgetPlanned", "USD"), "183.63");
+    assert.equal(value(general, "budgetPlanned", "USD", 2), "500.01");
+    assert.equal(value(general, "budgetActual", "USD"), "10.05");
+    assert.equal(value(general, "budgetCommitted", "USD"), "5.05");
+    assert.equal(value(general, "budgetAvailable", "USD"), "168.53");
+    assert.equal(value(general, "budgetForecast", "USD"), undefined);
+    assert.equal(value(general, "budgetForecast", "USD", 2), "600.06");
+    assert.equal(value(currentPage, "budgetPlanned", "USD"), "132.12");
+    assert.equal(value(currentPage, "budgetForecast", "USD"), "135");
+    assert.ok(general.some(row => row.budgetScenario === "OPTIMISTIC" && row.currencyCode === "CDF"));
+    assert.equal(general.some(row => row.currencyCode === "EUR"), false);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  assert.equal(await db.enterpriseBudget.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  console.log("PASS #1228 PostgreSQL budget register: 52 same-version budgets over batches, scenario/currency scopes, canonical positions and filtered expenses");
+}
+
 async function verifyProjectAnalytics(tenant, otherTenant, actor) {
   await assert.rejects(db.$transaction(async tx => {
     const today = new Date("2026-11-26");
@@ -1490,6 +1571,7 @@ try {
   const actor = "qa-1228-actor";
   await verifyConversionHistory(tenant, otherTenant, actor);
   await verifyProjectAnalytics(tenant, otherTenant, actor);
+  await verifyBudgetRegisterPositions(tenant, otherTenant, actor);
   await verifyCashAnalytics(tenant, otherTenant, actor);
   await verifyConnectedMobileMoney(tenant, actor);
   await verifyAssetRegisterAmounts(tenant, otherTenant, actor);
