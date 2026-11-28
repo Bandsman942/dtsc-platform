@@ -27,25 +27,26 @@ function localToday() {
 }
 
 /** Calendar dates are business days, never UTC instants on the client. */
-export function FinanceDateFilter({ locale, from, to, onChange, disabledReason }: {
+export function FinanceDateFilter({ locale, from, to, onChange, disabledReason, businessDate }: {
   locale: Locale;
   from: string;
   to: string;
   onChange: (from: string, to: string) => void;
   disabledReason?: string;
+  businessDate?: string;
 }) {
   const [mode, setMode] = useState<DateMode>(from && from === to ? "exact" : from || to ? "range" : "all");
   useEffect(() => { if (!from && !to) setMode("all"); }, [from, to]);
   const en = locale === "en";
   function choose(next: DateMode) {
     setMode(next);
-    const today = localToday();
+    const today = businessDate || localToday();
     if (next === "all") onChange("", "");
     if (next === "today" || next === "exact") onChange(today, today);
     if (next === "week") {
-      const date = new Date(`${today}T12:00:00`);
-      date.setDate(date.getDate() - ((date.getDay() + 6) % 7));
-      const start = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      const date = new Date(`${today}T00:00:00.000Z`);
+      date.setUTCDate(date.getUTCDate() - ((date.getUTCDay() + 6) % 7));
+      const start = date.toISOString().slice(0, 10);
       onChange(start, today);
     }
     if (next === "month") onChange(`${today.slice(0, 7)}-01`, today);
@@ -110,9 +111,9 @@ const filteredMetricLabels = {
   assetDepreciation: { fr: "Amortissements comptabilisés", en: "Posted depreciation" },
   assetNetBookValue: { fr: "Valeur nette comptable", en: "Net book value" },
 } as const;
-function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
+function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale, statusLabel?: (status: string) => string) {
   const status = row.status
-    ? (row.metric === "projectIndicativeBudget" ? professionalErpEnumLabel(locale, "projectStatus", row.status)
+    ? (statusLabel ? statusLabel(row.status) : row.metric === "projectIndicativeBudget" ? professionalErpEnumLabel(locale, "projectStatus", row.status)
       : row.metric.startsWith("payroll") ? professionalErpEnumLabel(locale, "payrollStatus", row.status)
         : (row.metric.startsWith("telco") || row.metric.startsWith("mobileMoney")) ? customerFacingStatusLabel(row.status, locale) : financeStatusLabel(row.status, locale))
     : "";
@@ -137,21 +138,21 @@ export function formatAnalyticsAmount(row: Pick<FinanceFilteredTotal, "amount" |
   }
 }
 
-export function FinanceFilteredTotals({ rows, locale, scope = "filtered" }: { rows: FinanceFilteredTotal[]; locale: Locale; scope?: "filtered" | "general" | "page" }) {
+export function FinanceFilteredTotals({ rows, locale, scope = "filtered", statusLabel }: { rows: FinanceFilteredTotal[]; locale: Locale; statusLabel?: (status: string) => string; scope?: "filtered" | "general" | "page" }) {
   if (!rows.length) return null;
   const label = scope === "general" ? (locale === "fr" ? "Totaux généraux autorisés (sans filtres)" : "Authorized general totals (without filters)")
     : scope === "page" ? (locale === "fr" ? "Sous-totaux de la page affichée" : "Displayed page subtotals")
     : locale === "fr" ? "Sous-totaux filtrés (toutes pages)" : "Filtered subtotals (all pages)";
-  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.operationType,row.currencyPair,row.status,row.currencyCode].join(":")} label={filteredMetricLabel(row, locale)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
+  return <div className="min-w-0"><p className="text-xs font-semibold text-dtsc-muted">{label}</p><ModuleMetrics label={label}>{rows.map(row => <ModuleMetric key={[row.metric,row.operationType,row.currencyPair,row.status,row.currencyCode].join(":")} label={filteredMetricLabel(row, locale, statusLabel)} value={formatAnalyticsAmount(row, locale)} />)}</ModuleMetrics></div>;
 }
 
 /** Keep all three scopes explicit; currencies and document statuses never mix. */
-export function FinanceAmountScopes({ totals, locale }: { totals: Partial<MonetaryScopes>; locale: Locale }) {
+export function FinanceAmountScopes({ totals, locale, statusLabel }: { totals: Partial<MonetaryScopes>; locale: Locale; statusLabel?: (status: string) => string }) {
   return <div className="grid min-w-0 gap-3" data-commercial-amount-scopes>
-    {totals.filteredTotals?.length ? <FinanceFilteredTotals rows={totals.filteredTotals} locale={locale} /> : <p className="text-sm text-dtsc-muted">{locale === "fr" ? "Aucun montant dans le résultat filtré." : "No amounts in the filtered result."}</p>}
+    {totals.filteredTotals?.length ? <FinanceFilteredTotals rows={totals.filteredTotals} locale={locale} statusLabel={statusLabel} /> : <p className="text-sm text-dtsc-muted">{locale === "fr" ? "Aucun montant dans le résultat filtré." : "No amounts in the filtered result."}</p>}
     <details className="min-w-0 rounded-xl border border-dtsc-border p-3">
       <summary className="cursor-pointer text-sm font-semibold text-dtsc-ink">{locale === "fr" ? "Comparer avec le général et la page" : "Compare general and page totals"}</summary>
-      <div className="mt-3 grid min-w-0 gap-3"><FinanceFilteredTotals rows={totals.generalTotals || []} locale={locale} scope="general" /><FinanceFilteredTotals rows={totals.pageTotals || []} locale={locale} scope="page" /></div>
+      <div className="mt-3 grid min-w-0 gap-3"><FinanceFilteredTotals rows={totals.generalTotals || []} locale={locale} statusLabel={statusLabel} scope="general" /><FinanceFilteredTotals rows={totals.pageTotals || []} locale={locale} statusLabel={statusLabel} scope="page" /></div>
     </details>
   </div>;
 }
@@ -174,7 +175,7 @@ function quantitySummaryKpis(rows:InventoryQuantityTotal[],locale:Locale,scope:"
 export type FinanceExportColumn = { key: string; labelFr: string; labelEn: string; get: (row: Record<string, unknown>) => string | number };
 
 /** Downloads the FULL authorized, filtered result up to the safe export cap; never silently exports only the visible page. */
-export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, reportFilters, columns, disabled, subtitleFr, subtitleEn }: {
+export function FinanceExportControls({ endpoint, organizationName, title, locale, filters, reportFilters, columns, disabled, subtitleFr, subtitleEn, statusLabel }: {
   endpoint: string;
   organizationName: string;
   title: string;
@@ -185,6 +186,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
   disabled?: boolean;
   subtitleFr?: string;
   subtitleEn?: string;
+  statusLabel?: (status: string) => string;
 }) {
   const [busy, setBusy] = useState<"CSV" | "Excel" | "PDF" | null>(null);
   const en = locale === "en";
@@ -233,7 +235,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         organizationName, title, subtitle: tr(subtitleFr || "DTSC Platform · Comptabilité & conformité", subtitleEn || "DTSC Platform · Accounting & compliance"),
         filenameBase: `DTSC-${title.replace(/\s+/g, "-")}-${localToday()}`,
         generatedLabel: `${tr("Édité le", "Generated on")} ${now}`,
-        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale)}`, value: formatAnalyticsAmount(row, locale) })) : []), ...(body.generalTotals || []).filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Total général autorisé sans filtres", "Authorized general total without filters")} · ${filteredMetricLabel(row, locale)}`, value: formatAnalyticsAmount(row, locale) })), ...quantitySummaryKpis(body.quantityTotals||[],locale,"filtered"), ...quantitySummaryKpis(body.generalQuantityTotals||[],locale,"general"), ...(body.quantityTotals ? [] : body.physicalTotals || []).map(row => ({ label: `${tr("Sous-total physique filtré", "Filtered on-hand subtotal")} · ${row.unit}`, value: `${row.value} ${row.unit}${row.precisionMismatch ? tr(" · Précision à vérifier", " · Precision needs review") : ""}` }))],
+        kpis: [{ label: tr("Enregistrements", "Records"), value: String(all.length), numericValue: all.length }, ...(Array.isArray(body.filteredTotals) ? body.filteredTotals.filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Sous-total filtré", "Filtered subtotal")} · ${filteredMetricLabel(row, locale, statusLabel)}`, value: formatAnalyticsAmount(row, locale) })) : []), ...(body.generalTotals || []).filter(row => row.metric in filteredMetricLabels).map(row => ({ label: `${tr("Total général autorisé sans filtres", "Authorized general total without filters")} · ${filteredMetricLabel(row, locale, statusLabel)}`, value: formatAnalyticsAmount(row, locale) })), ...quantitySummaryKpis(body.quantityTotals||[],locale,"filtered"), ...quantitySummaryKpis(body.generalQuantityTotals||[],locale,"general"), ...(body.quantityTotals ? [] : body.physicalTotals || []).map(row => ({ label: `${tr("Sous-total physique filtré", "Filtered on-hand subtotal")} · ${row.unit}`, value: `${row.value} ${row.unit}${row.precisionMismatch ? tr(" · Précision à vérifier", " · Precision needs review") : ""}` }))],
         includeCompleteSummary: Boolean(body.filteredTotals?.length || body.generalTotals?.length || body.physicalTotals?.length || body.quantityTotals?.length || body.generalQuantityTotals?.length),
         chart: [], insights: [],
         filters: reportFilters ?? Object.entries(filters || {}).filter(([, value]) => value).map(([key, value]) => ({ label: key, value })),

@@ -1,5 +1,6 @@
 ## 2026-11-25 — HOTFIX #1228 — Data Intelligence & Consistency 2.0 (v1.24.5 candidate DRAFT)
 
+- Facturation médicale. Recherche, dates et statuts filtrés côté serveur. Montants séparés par devise et statut sur toutes les pages, et exports du registre limités aux colonnes financières autorisées.
 - SYSCOHADA. Empreinte de l’édition signée et aperçu du candidat marchandises dans la mise en service comptable. La comparaison indique les conflits de codes et l’historique comptabilisé ou contrepassé de l’entreprise.
 - Stock. Les transferts peuvent utiliser une conversion catalogue versionnée. La quantité saisie et la quantité de stock restent accessibles depuis la demande jusqu’à la réception.
 - Comptabilité. Les lignes du grand livre, de la balance et du détail conservent les fractions de la devise fonctionnelle à l’écran.

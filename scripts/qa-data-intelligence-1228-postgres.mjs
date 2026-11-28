@@ -1351,6 +1351,105 @@ async function verifyProjectAnalytics(tenant, otherTenant, actor) {
   console.log("PASS #1228 PostgreSQL projects: filtered/authorized/page counters and budget amounts, date and tenant scopes");
 }
 
+async function verifyMedicalInvoiceRegister(tenant, otherTenant, actor) {
+  let canExport = false;
+  let reader;
+  const auditRows = [];
+  const { GET: getRegister } = workflowTestLoader({
+    "@/lib/auth": { getSession: async () => ({ userId: actor }) },
+    "@/lib/audit": { writeAuditLog: async ({ organizationId, metadata, action }) => auditRows.push({ organizationId, metadata, action }) },
+    "@/lib/health-billing": {},
+    "@/lib/health-billing-access": {
+      getHealthBillingAccess: async ({ organizationId }) => organizationId === tenant ? { canExport, canViewSensitive: false } : null,
+    },
+    "@/lib/prisma": { prisma: {
+      $transaction: async (callback, options) => {
+        assert.equal(options.isolationLevel, "RepeatableRead");
+        return callback(reader);
+      },
+    } },
+  })("@/app/api/enterprise/[organizationId]/healthcare/medical-billing/route");
+
+  await assert.rejects(db.$transaction(async tx => {
+    reader = tx;
+    await tx.user.create({ data: { id: actor, name: "Medical billing QA", email: `${tenant}@example.test`, passwordHash: "unused-in-fixture" } });
+    await tx.organization.createMany({ data: [tenant, otherTenant].map(id => ({
+      id, name: id, status: "ACTIVE", sectorCode: "HEALTH_CARE", timezone: "Africa/Kinshasa",
+    })) });
+    await tx.healthPatient.createMany({ data: [tenant, otherTenant].map(organizationId => ({
+      id: `${organizationId}-patient`, organizationId, patientNumber: "QA-P008", fullName: "Patient Test",
+      phonePrimary: "0000000", address: "Fixture", sex: "F", emergencyContactName: "Fixture",
+      emergencyContactPhone: "0000001", createdById: actor,
+    })) });
+    const base = {
+      organizationId: tenant, patientId: `${tenant}-patient`, invoiceType: "CONSULTATION",
+      invoiceDate: new Date("2026-11-25T00:00:00Z"), currency: "CDF", status: "PARTIAL_PAID",
+      createdById: actor, totalAmount: "999999999999.99", paidAmount: "0.01", balanceAmount: "999999999999.98",
+      notesInternal: "Private invoice note",
+    };
+    await tx.healthMedicalInvoice.createMany({ data: [
+      ...Array.from({ length: 51 }, (_, index) => ({
+        ...base, id: `${tenant}-cdf-${String(index).padStart(2, "0")}`, invoiceNumber: `QA-${index}`,
+      })),
+      { ...base, id: `${tenant}-aaa-usd`, invoiceNumber: "QA-USD", currency: "USD", totalAmount: "5.1", paidAmount: "1.1", balanceAmount: "4" },
+      { ...base, invoiceNumber: "QA-%-LATE", invoiceDate: new Date("2026-11-26T00:00:00Z"), status: "CANCELLED" },
+      { ...base, invoiceNumber: "QA-USD", organizationId: otherTenant, patientId: `${otherTenant}-patient`, currency: "EUR" },
+    ] });
+    const lastInvoiceId = `${tenant}-cdf-00`;
+    await tx.healthMedicalInvoicePayment.create({ data: {
+      organizationId: tenant, invoiceId: lastInvoiceId, amount: "0.01", paymentMethod: "CASH",
+      paymentReference: "Private payment reference", receiptNumber: "QA-001", comment: "Private payment note", collectedById: actor,
+    } });
+    const read = (query, organizationId = tenant) => getRegister(
+      new Request(`http://localhost/api/enterprise/${organizationId}/healthcare/medical-billing?${query}`),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const filters = "search=patient%20QA-P008&dateFrom=2026-11-25&dateTo=2026-11-25&status=PARTIAL_PAID";
+    const normal = await read(`mode=register&${filters}&pageSize=25`);
+    assert.equal(normal.headers.get("cache-control"), "private, no-store");
+    const first = await normal.json();
+    const third = await (await read(`mode=register&${filters}&pageSize=25&page=3`)).json();
+    const empty = await (await read(`mode=register&${filters}&pageSize=25&page=4`)).json();
+    const amount = (groups, currencyCode, metric) => groups.find(row => row.currencyCode === currencyCode && row.metric === metric)?.amount;
+    assert.deepEqual(first.pagination, { page: 1, pageSize: 25, total: 52, pageCount: 3 });
+    assert.equal(first.authorizedCount, 53);
+    assert.equal(first.metrics.partial, 52);
+    assert.equal(first.metrics.pending, 52);
+    assert.deepEqual(third.filteredTotals, first.filteredTotals);
+    assert.deepEqual(empty.filteredTotals, first.filteredTotals);
+    assert.deepEqual(empty.pageTotals, []);
+    assert.equal(third.items.length, 2);
+    assert.equal(amount(first.filteredTotals, "CDF", "invoiceTotal"), "50999999999999.49");
+    assert.equal(amount(first.filteredTotals, "CDF", "outstanding"), "50999999999998.98");
+    assert.equal(amount(first.filteredTotals, "USD", "paid"), "1.1");
+    assert.equal(amount(third.pageTotals, "CDF", "paid"), "0.01");
+    assert.equal(amount(third.pageTotals, "USD", "paid"), "1.1");
+    const lastInvoice = third.items.find(item => item.id === lastInvoiceId);
+    assert.equal(lastInvoice.notesInternal, null);
+    assert.equal(lastInvoice.payments[0].paymentReference, null);
+    assert.equal(lastInvoice.payments[0].comment, null);
+    assert.equal(first.generalTotals.some(row => row.currencyCode === "EUR"), false);
+    assert.equal(first.generalTotals.some(row => row.status === "CANCELLED"), true);
+    assert.equal((await read("mode=register&dateFrom=2026-02-30")).status, 400);
+    assert.equal((await read("mode=register&page=1.5")).status, 400);
+    assert.equal((await (await read("mode=register&search=%25")).json()).pagination.total, 1);
+    assert.equal((await read("mode=register", otherTenant)).status, 403);
+    assert.equal((await read(`mode=export&${filters}`)).status, 403);
+    canExport = true;
+    const exported = await (await read(`mode=export&${filters}&pageSize=100`)).json();
+    assert.deepEqual(exported.filteredTotals, first.filteredTotals);
+    assert.deepEqual(exported.items.map(row => row.id).slice(0, 25), first.items.map(row => row.id));
+    assert.deepEqual(Object.keys(exported.items[0]).sort(), ["balanceAmount", "currency", "id", "invoiceDate", "invoiceNumber", "paidAmount", "status", "totalAmount"].sort());
+    assert.equal(exported.items.find(item => item.id === lastInvoiceId).totalAmount, "999999999999.99");
+    assert.deepEqual(auditRows, [{
+      action: "HEALTH_MEDICAL_INVOICE_REGISTER_EXPORTED", organizationId: tenant, metadata: { page: 1, rowCount: 52 },
+    }]);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 15000 }), RollbackFixture);
+  assert.equal(await db.healthMedicalInvoice.count({ where: { organizationId: { in: [tenant, otherTenant] } } }), 0);
+  console.log("PASS #1228 PostgreSQL medical billing: comparable pages, exact currency/status totals, dates, tenant/export permissions and reduced export data");
+}
+
 try {
   const expected = [
     ["EnterpriseInventoryBalance", "quantityOnHand", 21],
@@ -1397,6 +1496,7 @@ try {
   await verifyTreasuryBalanceAt(tenant, otherTenant, actor);
   await verifyDailyStockReport(tenant, otherTenant, actor);
   await verifyLedgerSearch(tenant, otherTenant, actor);
+  await verifyMedicalInvoiceRegister(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
       const fixtureStarted=performance.now();

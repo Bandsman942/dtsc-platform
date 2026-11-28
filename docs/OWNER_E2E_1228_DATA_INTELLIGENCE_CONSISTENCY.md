@@ -87,3 +87,7 @@ Avec un adaptateur de recette, obtenir une confirmation alors que la période co
 ### Trésorerie — solde d’un compte à date
 
 Ouvrir **Trésorerie → Historique** et sélectionner un compte ou un wallet et une date de fin. Comparer le solde de la date passée avec le solde d’ouverture et les mouvements antérieurs à minuit dans le fuseau de l’entreprise. Inclure une opération ensuite contrepassée et vérifier son effet avant puis après la contrepassation. Changer le statut, la recherche et la page et vérifier que le solde du compte à la date reste identique. Comparer l’écran et les synthèses CSV, Excel et PDF. Vérifier qu’une date avant l’ouverture ou après aujourd’hui, ainsi qu’un historique impossible à rapprocher du solde courant, produisent un état explicite sans montant.
+
+### Facturation médicale — registre et exports
+
+Dans une clinique de recette, préparer au moins 51 factures en CDF et USD, dont des factures de même date, de statuts différents et une facture hors période. Rechercher successivement un numéro de facture, un patient et son numéro. Filtrer par statut et dates, puis changer de page. Le sous-total filtré reste stable et le total de la page évolue. Comparer les trois montants par devise dans l’écran et les exports CSV, Excel et PDF. Vérifier qu’aucun nom, numéro de patient ou note interne ne figure dans le rapport, et qu’un lecteur dépourvu du droit d’export ne peut pas appeler l’extraction. Répéter depuis une autre organisation.
