@@ -106,6 +106,9 @@ const filteredMetricLabels = {
   mobileMoneyFloatEffect: { fr: "Effet float enregistré", en: "Recorded float effect" },
   mobileMoneyFxSource: { fr: "Montant source converti", en: "Converted source amount" },
   mobileMoneyFxTarget: { fr: "Montant cible enregistré", en: "Recorded target amount" },
+  assetOriginalCost: { fr: "Coût d’acquisition", en: "Acquisition cost" },
+  assetDepreciation: { fr: "Amortissements comptabilisés", en: "Posted depreciation" },
+  assetNetBookValue: { fr: "Valeur nette comptable", en: "Net book value" },
 } as const;
 function filteredMetricLabel(row: FinanceFilteredTotal, locale: Locale) {
   const status = row.status
@@ -153,7 +156,7 @@ export function FinanceAmountScopes({ totals, locale }: { totals: Partial<Moneta
   </div>;
 }
 
-type AnalyticalExportTotals = { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{unitId:string;unit:string;value:string;precisionMismatch:boolean}>; quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[]; metrics?: { treasuryBalanceAt?: TreasuryBalanceAt } };
+type AnalyticalExportTotals = { filteredTotals?: FinanceFilteredTotal[]; generalTotals?: FinanceFilteredTotal[]; physicalTotals?: Array<{unitId:string;unit:string;value:string;precisionMismatch:boolean}>; quantityTotals?: InventoryQuantityTotal[]; generalQuantityTotals?: InventoryQuantityTotal[]; metrics?: { treasuryBalanceAt?: TreasuryBalanceAt; assetValuationUnavailableScopes?: string[] } };
 type PaginatedExportPayload = AnalyticalExportTotals & {items?:Record<string,unknown>[];pagination?:{pageCount?:number;total?:number};message?:string};
 
 export function treasuryBalanceAtKpi(balance: TreasuryBalanceAt, locale: Locale) {
@@ -204,6 +207,7 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
         ...(value.generalTotals || []).map(row=>JSON.stringify(["general",row.metric,row.currencyCode,row.status||"",row.operationType||"",row.currencyPair||"",row.amount])),
         ...(value.physicalTotals || []).map(row=>JSON.stringify(["physical",row.unitId,row.unit,row.value,row.precisionMismatch])),
         ...(value.metrics?.treasuryBalanceAt ? [JSON.stringify(value.metrics.treasuryBalanceAt)] : []),
+        ...(value.metrics?.assetValuationUnavailableScopes || []).filter(scope => scope !== "pageTotals"),
         ...(["quantityTotals","generalQuantityTotals"] as const).flatMap(scope=>(value[scope]||[]).map(row=>JSON.stringify([scope,row.metric,row.unitId,row.unit,row.decimalScale,row.value,row.precisionMismatch]))),
       ].sort());
       const firstSummary = summarySignature(body);
@@ -239,6 +243,13 @@ export function FinanceExportControls({ endpoint, organizationName, title, local
       };
       if (balance) {
         model.kpis.push(treasuryBalanceAtKpi(balance, locale));
+        model.includeCompleteSummary = true;
+      }
+      if (body.metrics?.assetValuationUnavailableScopes?.some(scope => scope !== "pageTotals")) {
+        model.kpis.push({
+          label: tr("Vérification des immobilisations", "Asset valuation review"),
+          value: tr("Certains totaux nécessitent de vérifier les écritures liées.", "Some totals require review of the linked journal entries."),
+        });
         model.includeCompleteSummary = true;
       }
       if (format === "CSV") downloadProfessionalCsv(model);

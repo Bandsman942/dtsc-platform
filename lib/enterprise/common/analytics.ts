@@ -1,6 +1,7 @@
 import { Prisma } from "@prisma/client";
 
-export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet" | "projectIndicativeBudget" | "cashClosingShortage" | "cashClosingSurplus" | "telcoSale" | "telcoCost" | "telcoMargin" | "mobileMoneyPrincipal" | "mobileMoneyFee" | "mobileMoneyCommission" | "mobileMoneyCashEffect" | "mobileMoneyFloatEffect" | "mobileMoneyFxSource" | "mobileMoneyFxTarget";
+export type MonetaryMetric = "debit" | "credit" | "original" | "outstanding" | "inbound" | "outbound" | "invoiceTotal" | "paid" | "credited" | "creditTotal" | "tax" | "subtotal" | "discount" | "total" | "payrollGross" | "payrollBonuses" | "payrollDeductions" | "payrollNet" | "projectIndicativeBudget" | "cashClosingShortage" | "cashClosingSurplus" | "telcoSale" | "telcoCost" | "telcoMargin" | "mobileMoneyPrincipal" | "mobileMoneyFee" | "mobileMoneyCommission" | "mobileMoneyCashEffect" | "mobileMoneyFloatEffect" | "mobileMoneyFxSource" | "mobileMoneyFxTarget"
+  | "assetOriginalCost" | "assetDepreciation" | "assetNetBookValue";
 export type MonetaryTotal = { currencyCode: string; metric: MonetaryMetric; amount: string; status?: string; operationType?: string; currencyPair?: string };
 export type MonetaryScopes = { filteredTotals: MonetaryTotal[]; generalTotals: MonetaryTotal[]; pageTotals: MonetaryTotal[] };
 

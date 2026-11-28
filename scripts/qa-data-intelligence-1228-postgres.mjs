@@ -138,6 +138,132 @@ const { GET: getPayrollRuns } = workflowTestLoader({
 
 class RollbackFixture extends Error {}
 
+const assetFixture = { reader: null, organizationId: "", actor: "" };
+const { GET: getAssetAccounting } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(assetFixture.reader);
+  } } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/accounting/asset-accounting-service": {},
+  "@/lib/enterprise/accounting/http": {
+    authorizeFinanceRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "FINANCE_ASSETS");
+      assert.equal(action, "view");
+      return organizationId === assetFixture.organizationId
+        ? { ok: true, session: { userId: assetFixture.actor }, access: { capabilities: {} } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    financeListParams(req) {
+      const query = new URL(req.url).searchParams;
+      return { page: Number(query.get("page") || 1), pageSize: 25, search: query.get("search"), status: query.get("status") };
+    },
+    financeBusinessDateRange(req) {
+      const query = new URL(req.url).searchParams;
+      return { ok: true, from: query.has("dateFrom") ? new Date(query.get("dateFrom")) : null, to: null };
+    },
+  },
+})("@/app/api/enterprise/[organizationId]/asset-accounting/route");
+
+async function verifyAssetRegisterAmounts(tenant, otherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    const inServiceDate = new Date("2026-11-05");
+    const year = await tx.enterpriseFiscalYear.create({ data: {
+      organizationId: tenant, code: "2026", startDate: new Date("2026-01-01"), endDate: new Date("2026-12-31"), createdByUserId: actor,
+    } });
+    const period = await tx.enterpriseFiscalPeriod.create({ data: {
+      organizationId: tenant, fiscalYearId: year.id, code: "2026-11", startDate: new Date("2026-11-01"), endDate: new Date("2026-11-30"), createdByUserId: actor,
+    } });
+    const journal = await tx.enterpriseJournal.create({ data: {
+      organizationId: tenant, code: "QA-IMMO", nameFr: "Journal", nameEn: "Journal", journalType: "GENERAL", createdByUserId: actor,
+    } });
+    const records = [
+      ...Array.from({ length: 51 }, (_, index) => ({ id: tenant + "-active-" + String(index).padStart(2, "0"), organizationId: tenant,
+        inServiceDate, code: "QA-ASSET-" + index, originalCost: "99999999999999.999999", currencyCode: "CDF", status: "ACTIVE" })),
+      { id: tenant + "-unknown", organizationId: tenant, inServiceDate, code: "QA-ASSET-UNKNOWN", originalCost: "10.000001", currencyCode: "USD", status: "ACTIVE" },
+      { id: tenant + "-disposed", organizationId: tenant, inServiceDate, code: "QA-ASSET-DISPOSED", originalCost: "12.345678", currencyCode: "USD", status: "DISPOSED" },
+      { id: tenant + "-old", organizationId: tenant, inServiceDate: new Date("2026-10-05"), code: "QA-ASSET-OLD", originalCost: "10", currencyCode: "EUR", status: "ACTIVE" },
+      { id: otherTenant + "-foreign", organizationId: otherTenant, inServiceDate, code: "QA-ASSET-FOREIGN", originalCost: "100", currencyCode: "XAF", status: "ACTIVE" },
+    ];
+    await tx.enterpriseAsset.createMany({ data: records.map(({ id, code, organizationId }) => ({ id, organizationId, code, name: code, createdByUserId: actor })) });
+    await tx.enterpriseAssetAccountingProfile.createMany({ data: records.map(({ code: _code, id, ...row }) => ({
+      ...row, id: id + "-profile", assetId: id, capitalizationSourceType: "OPERATIONAL_ASSET", usefulLifeMonths: 12,
+      assetAccountId: "qa-cost", accumulatedDepreciationAccountId: "qa-accumulated", depreciationExpenseAccountId: "qa-expense",
+    })) });
+    await tx.enterpriseJournalEntry.createMany({ data: records.filter(row => row.organizationId === tenant && row.status === "ACTIVE").map(row => ({
+      organizationId: tenant, fiscalPeriodId: period.id, journalId: journal.id,
+      number: row.id + "-capitalized", reference: row.code, description: "Asset opening evidence",
+      accountingDate: row.inServiceDate, status: "POSTED", preparedByUserId: actor, postedByUserId: actor, postedAt: row.inServiceDate,
+      functionalCurrencyCode: row.currencyCode, sourceModule: "FINANCE_ASSETS", postingEvent: "ASSET_CAPITALIZED",
+      sourceEntityType: "EnterpriseAssetAccountingProfile", sourceEntityId: row.id + "-profile",
+      totalDebit: row.originalCost, totalCredit: row.originalCost,
+    })) });
+    const evidence = async (id, event, type, sourceId, amount, status = "POSTED") => tx.enterpriseJournalEntry.create({ data: {
+      id, organizationId: tenant, fiscalPeriodId: period.id, journalId: journal.id, number: id, reference: id,
+      description: "Asset fixture", accountingDate: inServiceDate, status, preparedByUserId: actor, postedByUserId: actor, postedAt: inServiceDate,
+      functionalCurrencyCode: "CDF", sourceModule: "FINANCE_ASSETS", postingEvent: event,
+      sourceEntityType: type, sourceEntityId: sourceId, totalDebit: amount, totalCredit: amount,
+    } });
+    const profileId = records[0].id + "-profile";
+    const postedSchedule = async (periodCode, amount, status) => {
+      const id = profileId + "-" + periodCode;
+      const entry = await evidence(id + "-journal", "ASSET_DEPRECIATION_POSTED", "EnterpriseAssetDepreciationSchedule", id, amount, status);
+      await tx.enterpriseAssetDepreciationSchedule.create({ data: {
+        id, organizationId: tenant, assetAccountingProfileId: profileId, periodCode, scheduledDate: inServiceDate,
+        openingNetBookValue: "100", depreciationAmount: amount, closingNetBookValue: "90", idempotencyKey: id, status: "POSTED", journalEntryId: entry.id,
+      } });
+      await tx.enterpriseAssetDepreciationEntry.create({ data: {
+        organizationId: tenant, depreciationScheduleId: id, amount, journalEntryId: entry.id, postedByUserId: actor,
+      } });
+    };
+    await postedSchedule("2026-11", "0.000001", "POSTED");
+    await postedSchedule("2026-12", "1", "REVERSED");
+    await tx.enterpriseAssetDepreciationSchedule.createMany({ data: [
+      { organizationId: tenant, assetAccountingProfileId: profileId, periodCode: "2027-01", scheduledDate: inServiceDate,
+        openingNetBookValue: "100", depreciationAmount: "10", closingNetBookValue: "90", idempotencyKey: "qa-planned", status: "PLANNED" },
+      { organizationId: tenant, assetAccountingProfileId: tenant + "-unknown-profile", periodCode: "2026-11", scheduledDate: inServiceDate,
+        openingNetBookValue: "10", depreciationAmount: "1", closingNetBookValue: "9", idempotencyKey: "qa-no-evidence", status: "POSTED" },
+    ] });
+    const disposalId = tenant + "-disposal";
+    const disposalEntry = await evidence(disposalId + "-journal", "ASSET_DISPOSAL_POSTED", "EnterpriseAssetDisposal", disposalId, "12.345678");
+    await tx.enterpriseAssetDisposal.create({ data: {
+      id: disposalId, organizationId: tenant, assetAccountingProfileId: tenant + "-disposed-profile", disposalDate: inServiceDate,
+      currencyCode: "USD", grossValue: "12.345678", accumulatedDepreciation: "0", netBookValue: "12.345678", gainLoss: "-12.345678",
+      status: "POSTED", journalEntryId: disposalEntry.id, createdByUserId: actor,
+    } });
+    Object.assign(assetFixture, { reader: tx, organizationId: tenant, actor });
+    const read = (query, organizationId = tenant) => getAssetAccounting(
+      new Request(`http://localhost/api/enterprise/${organizationId}/asset-accounting?${query}`),
+      { params: Promise.resolve({ organizationId }) },
+    );
+    const query = "search=QA-ASSET&dateFrom=2026-11-01&status=ACTIVE";
+    const response = await read(query);
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    const first = await response.json();
+    const third = await (await read(query + "&page=3")).json();
+    const empty = await (await read(query + "&page=4")).json();
+    assert.deepEqual(first.pagination, { page: 1, pageSize: 25, pageCount: 3, total: 52 });
+    assert.equal(third.items.length, 2);
+    assert.deepEqual(third.filteredTotals, first.filteredTotals);
+    assert.deepEqual(empty.generalTotals, first.generalTotals);
+    assert.deepEqual(empty.pageTotals, []);
+    const active = metric => first.filteredTotals.find(row => row.currencyCode === "CDF" && row.metric === metric)?.amount;
+    assert.equal(active("assetOriginalCost"), "5099999999999999.999949");
+    assert.equal(active("assetDepreciation"), "0.000001");
+    assert.equal(active("assetNetBookValue"), "5099999999999999.999948");
+    assert.equal(first.items.find(item => item.id === profileId)?.netBookValue, "99999999999999.999998");
+    assert.equal(first.filteredTotals.some(row => row.currencyCode === "EUR"), false);
+    assert.equal(first.filteredTotals.some(row => row.currencyCode === "USD" && row.metric === "assetNetBookValue"), false);
+    assert.ok(first.metrics.assetValuationUnavailableScopes.includes("filteredTotals"));
+    assert.ok(first.generalTotals.find(row => row.status === "DISPOSED" && row.metric === "assetNetBookValue")?.amount === "0");
+    assert.equal(first.generalTotals.some(row => row.currencyCode === "XAF"), false);
+    assert.equal((await read(query, otherTenant)).status, 403);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  console.log("PASS #1228 PostgreSQL asset register: exact costs, posted depreciation and net value, independent pagination, incomplete evidence and tenant scope");
+}
+
 const cashFixture = { reader: null, organizationId: "", siteId: "", actor: "" };
 const ledgerFixture = { reader: null, organizationId: "", actor: "" };
 const { previewSyscohadaMerchandisePolicy } = workflowTestLoader({
@@ -1160,6 +1286,7 @@ try {
   await verifyProjectAnalytics(tenant, otherTenant, actor);
   await verifyCashAnalytics(tenant, otherTenant, actor);
   await verifyConnectedMobileMoney(tenant, actor);
+  await verifyAssetRegisterAmounts(tenant, otherTenant, actor);
   await verifyTreasuryBalanceAt(tenant, otherTenant, actor);
   await verifyLedgerSearch(tenant, otherTenant, actor);
   try {

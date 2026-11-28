@@ -13,6 +13,7 @@
 - POS. Le pas de saisie des quantités suit l’unité du produit. L’aperçu tarifaire, la vente et la préparation de facture refusent les fractions incompatibles avant tout mouvement de stock.
 - Reprise des conversions Mobile Money historiques. Le contrôle des deux wallets et la finalisation du journal utilisent la même transaction. Une tentative bloquée conserve le diagnostic, sans rejouer les mouvements.
 - Avoirs Retail. Le formulaire de retour et les quantités par lot suivent la précision de l’unité catalogue. Le cumul et la comparaison des lots conservent les micro-unités.
+- Immobilisations. Le registre et ses exports distinguent coûts d’acquisition, amortissements comptabilisés et valeur nette comptable par devise et statut. Les totaux nécessitant une vérification sont signalés.
 - Stock : la saisie des transferts, comptages et ajustements suit la précision de l’unité catalogue. Lecture exacte des valeurs historiques et contrôle de la précision du produit lors des conversions.
 - Trésorerie : sous-totaux de l’historique par devise, statut et sens, avec comparaison du filtré, du général et de la page. Filtres et synthèses des exports partagent les calculs serveur.
 - Dépenses : sous-totaux et exports par devise et statut, calculés dans le périmètre autorisé du registre.

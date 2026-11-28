@@ -32,6 +32,8 @@ La recette concerne la PR #1229 et la version candidate 1.24.5. Exécuter les sc
 
 ## Comptabilité
 
+Dans le registre des immobilisations, préparer des actifs en CDF et USD avec des amortissements planifiés, comptabilisés et contrepassés. Filtrer par statut et date de mise en service, puis comparer les totaux sur trois pages et dans les exports. Seules les écritures d’amortissement confirmées réduisent la valeur nette. Un actif dont la sortie est comptabilisée a une valeur nette restante nulle. Pour un actif signalé sans preuve comptable, vérifier le message à l’écran et dans les exports.
+
 1. Créer une sortie de stock valorisée puis ouvrir le journal et le grand livre. Vérifier la référence, la désignation enregistrée, le coût, les comptes, l’équilibre et l’idempotence. Après renommage de l’article, vérifier que la désignation du posting d’origine reste lisible.
 2. Ouvrir une écriture historique et vérifier la distinction entre désignation enregistrée, désignation actuelle retrouvée et référence introuvable. Contrôler aussi la recherche et l’export.
 3. Reproduire sur une organisation de recette l’imputation de la pièce auditée, une livraison de facture client valorisée au coût moyen pondéré avec SYSCOHADA 0.1.0. Vérifier la politique versionnée depuis la réception et la facture fournisseur jusqu’à la sortie, aux retours et aux états. Comparer les références historiques avant et après le changement de version.
