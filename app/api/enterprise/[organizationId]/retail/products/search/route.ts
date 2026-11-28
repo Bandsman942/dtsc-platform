@@ -4,6 +4,7 @@ import { writeApiLog } from "@/lib/audit";
 import { authorizeRetailRequest, retailErrorResponse } from "@/lib/enterprise/retail/http";
 import { requireRetailSiteCapability } from "@/lib/enterprise/retail/site-access";
 import { readActiveRetailInvoiceStockHoldsTx } from "@/lib/enterprise/retail/invoice-stock-holds";
+import { exactInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { prisma } from "@/lib/prisma";
 
 type Params = { params: Promise<{ organizationId: string }> };
@@ -80,6 +81,7 @@ export async function GET(req: Request, { params }: Params) {
         indicativeCost: true,
         currency: true,
         trackInventory: true,
+        unitOfMeasure: { select: { name: true, symbol: true, decimalScale: true } },
         inventoryItems: {
           where: { status: "ACTIVE", archivedAt: null },
           take: 1,
@@ -110,15 +112,15 @@ export async function GET(req: Request, { params }: Params) {
   });
   const heldByItem = new Map<string, Prisma.Decimal>();
   for (const hold of retailHolds) {
-    heldByItem.set(hold.inventoryItemId, (heldByItem.get(hold.inventoryItemId) || new Prisma.Decimal(0)).plus(hold.quantity));
+    heldByItem.set(hold.inventoryItemId, (heldByItem.get(hold.inventoryItemId) ?? exactInventoryQuantity(0)).plus(hold.quantity));
   }
 
   const results = items.map((item) => {
     const inventoryItem = item.inventoryItems[0] || null;
     const availableQuantity = inventoryItem?.balances.reduce(
       (totalAvailable, balance) => totalAvailable.plus(balance.quantityOnHand).minus(balance.quantityReserved),
-      new Prisma.Decimal(0),
-    ).minus(heldByItem.get(inventoryItem.id) || 0) ?? null;
+      exactInventoryQuantity(0),
+    ).minus(heldByItem.get(inventoryItem.id) ?? 0) ?? null;
 
     return {
       id: item.id,
@@ -130,6 +132,7 @@ export async function GET(req: Request, { params }: Params) {
       indicativeCost: item.indicativeCost,
       currency: item.currency,
       trackInventory: item.trackInventory,
+      unitOfMeasure: item.unitOfMeasure,
       inventoryItemId: inventoryItem?.id || null,
       allowNegativeStock: inventoryItem?.allowNegativeStock || false,
       availableQuantity: availableQuantity?.toFixed() ?? null,

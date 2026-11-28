@@ -7,6 +7,7 @@ import { postBusinessEventTx } from "@/lib/enterprise/accounting/posting-service
 import { money, publishFinanceEvent, sumDecimals } from "@/lib/enterprise/accounting/helpers";
 import { publishEnterpriseEvent } from "@/lib/enterprise/crm-sales/helpers";
 import { applyStockMovementTx } from "@/lib/enterprise/inventory/service";
+import { requireInventoryQuantity } from "@/lib/enterprise/inventory/quantity-policy";
 import { finalizeRetailSaleAccountingTx, finalizeRetailSaleReversalAccountingTx } from "@/lib/enterprise/retail/accounting";
 import { RETAIL_PROFILE_CODE, RETAIL_SECTOR_CODE } from "@/lib/enterprise/retail/constants";
 import { EnterpriseRetailError } from "@/lib/enterprise/retail/errors";
@@ -215,7 +216,7 @@ export async function createRetailSale(
       input.customerBusinessPartyId ? tx.enterpriseBusinessParty.findFirst({ where: { id: input.customerBusinessPartyId, organizationId, status: "ACTIVE", archivedAt: null }, select: { id: true } }) : Promise.resolve(null),
       tx.enterpriseCatalogItem.findMany({
         where: { id: { in: catalogItemIds }, organizationId, status: "ACTIVE", archivedAt: null },
-        select: { id: true, name: true, currency: true, trackInventory: true },
+        select: { id: true, name: true, currency: true, trackInventory: true, unitOfMeasure: { select: { decimalScale: true } } },
       }),
       tx.enterpriseInventoryItem.findMany({
         where: { organizationId, catalogItemId: { in: catalogItemIds }, status: "ACTIVE", archivedAt: null },
@@ -250,7 +251,7 @@ export async function createRetailSale(
         }
         inventoryItemId = inventoryItem.id;
       }
-      const quantity = decimal(line.quantity);
+      const quantity = requireInventoryQuantity(line.quantity, catalogItem.unitOfMeasure.decimalScale, { positive: true });
       const unitPrice = decimal(line.unitPrice);
       const discountAmount = decimal(line.discountAmount || 0);
       const taxAmount = decimal(line.taxAmount || 0);
@@ -357,7 +358,7 @@ export async function createRetailSale(
         stockLotId: line.stockLotId,
         movementType: "SALE_FULFILLMENT",
         direction: "OUT",
-        quantity: Number(line.quantity),
+        quantity: line.quantity.toFixed(),
         sourceEntityType: "EnterpriseRetailSale",
         sourceEntityId: sale.id,
         sourceLineId: line.id,
@@ -426,7 +427,7 @@ export async function reverseRetailSale(organizationId: string, saleId: string, 
         stockLotId: line.stockLotId,
         movementType: "RETURN_IN",
         direction: "IN",
-        quantity: Number(line.quantity),
+        quantity: line.quantity.toFixed(),
         sourceEntityType: "EnterpriseRetailSale",
         sourceEntityId: sale.id,
         sourceLineId: line.id,

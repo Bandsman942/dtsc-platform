@@ -314,6 +314,10 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
     const product = (search.body?.items || []).find((item) => item.id === fixture.catalogItemId);
     expect(product, "Seeded inventory product must be discoverable through the POS server search by code").toBeTruthy();
     expect(product.inventoryItemId).toBe(fixture.inventoryItemId);
+    const unit = await prisma.enterpriseCatalogItem.findUniqueOrThrow({
+      where: { id: fixture.catalogItemId }, select: { unitOfMeasure: { select: { decimalScale: true, name: true, symbol: true } } },
+    });
+    expect(product.unitOfMeasure).toEqual(unit.unitOfMeasure);
 
     const idempotencyKey = `shop2-e2e-sale-${Date.now()}`;
     const salePayload = {
@@ -348,6 +352,19 @@ test.describe.serial("Shop 2.0 Retail behavioral acceptance", () => {
         stockLotId: null,
       },
     });
+
+    const scale = product.unitOfMeasure.decimalScale;
+    const badQuantity = `1.${"0".repeat(scale)}1`;
+    const rejectedPreview = await apiPost(page, `/api/enterprise/${organizationId}/retail/pricing/preview`, {
+      currencyCode: fixture.currencyCode, channelCode: "POS", lines: [{ catalogItemId: fixture.catalogItemId, quantity: badQuantity }],
+    });
+    expect(rejectedPreview.response.status(), JSON.stringify(rejectedPreview.body)).toBe(400);
+    const refused = await apiPost(page, `/api/enterprise/${organizationId}/retail/sales`, {
+      ...salePayload, idempotencyKey: idempotencyKey + "-bad-unit",
+      lines: [{ ...salePayload.lines[0], quantity: badQuantity }],
+    });
+    expect(refused.response.status(), JSON.stringify(refused.body)).toBe(400);
+    expect(await prisma.enterpriseRetailSale.count({ where: { organizationId, idempotencyKey: idempotencyKey + "-bad-unit" } })).toBe(0);
 
     const created = await apiPost(page, `/api/enterprise/${organizationId}/retail/sales`, salePayload);
     expect(created.response.status(), JSON.stringify(created.body)).toBe(201);

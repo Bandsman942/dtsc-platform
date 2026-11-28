@@ -34,6 +34,7 @@ import retailTransactionFormsEn from "@/locales/retail-transaction-forms.en.json
 import retailTransactionFormsFr from "@/locales/retail-transaction-forms.fr.json";
 import { notifyToast } from "@/lib/client-toast";
 import { customerFacingError, customerFacingFinancialAccountType, customerFacingStatusLabel } from "@/lib/customer-facing-language";
+import { inventoryQuantityMicrounits, inventoryQuantityStep, isInventoryQuantityInputValid, localizeInventoryQuantity } from "@/lib/enterprise/inventory/quantity-display";
 import type { EnterpriseModuleDefinition } from "@/lib/enterprise/module-registry";
 import { translateRetailWorkspace, type RetailWorkspaceKey } from "@/lib/i18n";
 
@@ -42,7 +43,9 @@ type PosDashboard = RetailDashboard & { cashSessions?: MobileMoneyCashSession[] 
 type CartLine = {
   catalogItemId: string;
   name: string;
-  quantity: number;
+  quantity: string;
+  unitLabel: string;
+  decimalScale: number;
   unitPrice: number;
   referenceUnitPrice: number | null;
   discountAmount: number;
@@ -90,7 +93,7 @@ type SaleDraft = {
     catalogItemId: string;
     inventoryItemId: string | null;
     stockLotId: string | null;
-    quantity: number;
+    quantity: string;
     unitPrice: number;
     discountAmount: number;
     taxAmount: number;
@@ -104,6 +107,14 @@ type FormErrors = Partial<Record<ErrorKey, string>>;
 
 function retailText(locale: "fr" | "en", key: RetailWorkspaceKey) {
   return translateRetailWorkspace(locale, key);
+}
+
+function validCartQuantity(line: CartLine) {
+  return isInventoryQuantityInputValid(line.quantity, line.decimalScale) && Number(line.quantity) <= 1_000_000;
+}
+
+function addOneUnit(line: CartLine) {
+  return Number(inventoryQuantityMicrounits(line.quantity) + BigInt(1_000_000)) / 1_000_000;
 }
 
 function GuidedField({
@@ -294,14 +305,15 @@ function PosOperate({
     return () => { active = false; window.removeEventListener("dtsc-retail-customer-changed", onChange); };
   }, [organizationId, locale]);
   const total = useMemo(
-    () => cart.reduce((sum, line) => sum + line.quantity * line.unitPrice - line.discountAmount + line.taxAmount, 0),
+    () => cart.reduce((sum, line) => sum + Number(line.quantity) * line.unitPrice - line.discountAmount + line.taxAmount, 0),
     [cart],
   );
   const overrideNeeded = useMemo(
     () => cart.some((line) => line.referenceUnitPrice === null || Math.abs(line.unitPrice - line.referenceUnitPrice) > 0.000001 || line.discountAmount > 0 || line.taxAmount > 0),
     [cart],
   );
-  const previewRequired = cart.length > 0 && !overrideNeeded;
+  const invalidQuantity = cart.some((line) => !validCartQuantity(line));
+  const previewRequired = cart.length > 0 && !overrideNeeded && !invalidQuantity;
   const effectiveTotal = previewRequired && pricingPreview
     ? Number(pricingPreview.grandTotal)
     : total;
@@ -431,6 +443,11 @@ function PosOperate({
   }
 
   function addItem(item: CatalogItem) {
+    const unit = item.unitOfMeasure;
+    if (!unit || !inventoryQuantityStep(unit.decimalScale)) {
+      notifyToast(retailText(locale, "posQuantityUnit"), "error");
+      return;
+    }
     const itemCurrency = item.currency || dashboard.configuration?.baseCurrencyCode || "CDF";
     if (cart.length && itemCurrency !== currency) {
       notifyToast(copy.mixedCurrency, "error");
@@ -442,7 +459,12 @@ function PosOperate({
       return;
     }
     const existing = cart.find((line) => line.catalogItemId === item.id);
-    if (existing && item.trackInventory && !item.allowNegativeStock && stock !== null && existing.quantity >= stock) {
+    if (existing && !validCartQuantity(existing)) {
+      notifyToast(retailText(locale, "posQuantityUnit"), "error");
+      return;
+    }
+    const incremented = existing ? addOneUnit(existing) : 1;
+    if (incremented > 1_000_000 || (existing && item.trackInventory && !item.allowNegativeStock && stock !== null && incremented > stock)) {
       notifyToast(copy.itemUnavailable, "error");
       return;
     }
@@ -453,12 +475,17 @@ function PosOperate({
     setCart((current) => {
       const currentLine = current.find((line) => line.catalogItemId === item.id);
       if (currentLine) {
-        return current.map((line) => line.catalogItemId === item.id ? { ...line, quantity: line.quantity + 1 } : line);
+        if (!validCartQuantity(currentLine)) return current;
+        const next = addOneUnit(currentLine);
+        if (next > 1_000_000 || (item.trackInventory && !item.allowNegativeStock && stock !== null && next > stock)) return current;
+        return current.map((line) => line.catalogItemId === item.id ? { ...line, quantity: String(next) } : line);
       }
       return [...current, {
         catalogItemId: item.id,
         name: item.name,
-        quantity: 1,
+        quantity: "1",
+        unitLabel: unit.symbol || unit.name,
+        decimalScale: unit.decimalScale,
         unitPrice,
         referenceUnitPrice,
         discountAmount: 0,
@@ -527,18 +554,17 @@ function PosOperate({
     if (!warehouseId || !warehouses.some((warehouse) => warehouse.id === warehouseId)) nextErrors.warehouse = copy.missingWarehouse;
     if (!cart.length) nextErrors.cart = copy.emptyCart;
     const invalidLine = cart.some((line) =>
-      !Number.isFinite(line.quantity)
-      || line.quantity <= 0
-      || !Number.isFinite(line.unitPrice)
+      !Number.isFinite(line.unitPrice)
       || line.unitPrice < 0
       || !Number.isFinite(line.discountAmount)
       || line.discountAmount < 0
-      || line.discountAmount > line.quantity * line.unitPrice + line.taxAmount
+      || line.discountAmount > Number(line.quantity) * line.unitPrice + line.taxAmount
     );
     if (invalidLine || !Number.isFinite(effectiveTotal) || effectiveTotal <= 0) nextErrors.cart = copy.invalidCart;
-    if (cart.some((line) => line.stockLotId && Number(stockLots.find((lot) => lot.id === line.stockLotId)?.quantityAvailable || 0) < line.quantity)) {
+    if (cart.some((line) => line.stockLotId && Number(stockLots.find((lot) => lot.id === line.stockLotId)?.quantityAvailable || 0) < Number(line.quantity))) {
       nextErrors.cart = locale === "fr" ? "Le lot sélectionné ne dispose pas de la quantité demandée." : "The selected batch has insufficient stock.";
     }
+    if (invalidQuantity) nextErrors.cart = retailText(locale, "posQuantityUnit");
     if (previewRequired && (pricingPreviewLoading || pricingPreviewError || !pricingPreview)) {
       nextErrors.amounts = pricingPreviewError || retailText(locale, "pricingPreviewUnavailable");
     }
@@ -693,7 +719,7 @@ function PosOperate({
                   >
                     <p className="break-words font-black text-dtsc-ink">{item.name}</p>
                     <p className="mt-1 text-xs font-semibold text-dtsc-muted">{item.sku || item.code} · {moneyValue(item.indicativeSalePrice, item.currency || currency, locale)}</p>
-                    <p className="mt-1 text-xs font-bold text-dtsc-muted">{item.trackInventory ? `${retailText(locale, "available")}: ${stock ?? "—"}` : retailText(locale, "serviceNoStock")}</p>
+                    <p className="mt-1 text-xs font-bold text-dtsc-muted">{item.trackInventory ? `${retailText(locale, "available")}: ${stock === null ? "—" : localizeInventoryQuantity(String(item.availableQuantity), locale)}` : retailText(locale, "serviceNoStock")}</p>
                   </button>
                 );
               })}
@@ -721,8 +747,8 @@ function PosOperate({
                     }}><XCircle className="h-4 w-4" /></Button>
                   </div>
                   <div className="mt-3 grid min-w-0 gap-3 sm:grid-cols-3">
-                    <GuidedField label={retailText(locale, "quantityShort")} help={copy.quantityHelp} required requiredLabel={copy.required}>
-                      <Input type="number" min="0.001" step="0.001" value={line.quantity} onChange={(event) => updateLine(line.catalogItemId, { quantity: Number(event.target.value) })} />
+                    <GuidedField label={`${retailText(locale, "quantityShort")} · ${line.unitLabel}`} help={copy.quantityHelp} required requiredLabel={copy.required}>
+                      <Input type="number" min={inventoryQuantityStep(line.decimalScale)} max="1000000" step={inventoryQuantityStep(line.decimalScale)} value={line.quantity} aria-invalid={!validCartQuantity(line)} onChange={(event) => updateLine(line.catalogItemId, { quantity: event.target.value })} />
                     </GuidedField>
                     <GuidedField label={retailText(locale, "unitPrice")} help={copy.priceHelp} required requiredLabel={copy.required}>
                       <Input type="number" min="0" step="0.01" value={line.unitPrice} disabled={!dashboard.access.canManage} onChange={(event) => updateLine(line.catalogItemId, { unitPrice: Number(event.target.value) })} />
@@ -898,7 +924,7 @@ function PosOperate({
             <div className="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <p className="text-2xl font-black text-dtsc-ink">{moneyValue(lastReceipt.grandTotal, lastReceipt.currencyCode, locale)}</p>
-                <p className="text-sm font-bold text-dtsc-muted">{lastReceipt.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}</p>
+                <p className="text-sm font-bold text-dtsc-muted">{lastReceipt.lines.map((line) => `${line.description} × ${localizeInventoryQuantity(String(line.quantity), locale)}`).join(" · ")}</p>
               </div>
               <div data-responsive-actions>
                 <Button variant="outline" onClick={() => window.open(`/api/enterprise/${organizationId}/retail/sales/${lastReceipt.id}/receipt?format=html&lang=${locale}&paper=a4`, "_blank", "noopener,noreferrer")}><Printer className="h-4 w-4" />{locale === "fr" ? "Imprimer A4" : "Print A4"}</Button>
@@ -947,13 +973,13 @@ function PosOperate({
                 const shownDiscount = serverLine ? Number(serverLine.discountAmount) : line.discountAmount;
                 const shownTotal = serverLine
                   ? Number(serverLine.lineTotal)
-                  : line.quantity * line.unitPrice - line.discountAmount + line.taxAmount;
+                  : Number(line.quantity) * line.unitPrice - line.discountAmount + line.taxAmount;
                 return (
                   <div key={line.catalogItemId} className="flex min-w-0 items-start justify-between gap-3 rounded-xl border border-dtsc-border bg-dtsc-page p-3">
                     <div className="min-w-0">
                       <p className="break-words text-sm font-black text-dtsc-ink">{line.name}</p>
                       <p className="text-xs font-semibold text-dtsc-muted">
-                        {Number(line.quantity)} × {moneyValue(shownUnitPrice, line.currencyCode, locale)}
+                        {localizeInventoryQuantity(line.quantity, locale)} × {moneyValue(shownUnitPrice, line.currencyCode, locale)}
                         {shownDiscount ? ` · -${moneyValue(shownDiscount, line.currencyCode, locale)}` : ""}
                       </p>
                     </div>
@@ -1041,7 +1067,7 @@ function PosHistory({
                 title={`${item.number} · ${moneyValue(item.grandTotal, item.currencyCode, locale)}`}
                 status={<StatusBadge tone={statusTone(item.status)}>{customerFacingStatusLabel(item.status, locale)}</StatusBadge>}
                 meta={formatEnterpriseDate(item.soldAt, locale)}
-                description={item.lines.map((line) => `${line.description} × ${Number(line.quantity)}`).join(" · ")}
+                description={item.lines.map((line) => `${line.description} × ${localizeInventoryQuantity(String(line.quantity), locale)}`).join(" · ")}
                 actions={dashboard.access.canManage && item.status === "COMPLETED" ? (
                   <Button size="sm" variant="outline" disabled={Boolean(busyAction)} onClick={() => {
                     setTarget(item);

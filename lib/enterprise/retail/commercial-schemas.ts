@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { retailSaleQuantitySchema } from "@/lib/enterprise/retail/schemas";
 
 const id = z.string().trim().min(1).max(240);
 const code = z.string().trim().min(1).max(80).transform((value) => value.toUpperCase().replace(/[^A-Z0-9_-]/g, "_"));
@@ -91,7 +92,7 @@ export const retailPricingPreviewSchema = retailCommercialContextSchema.extend({
   customerBusinessPartyId: id.optional().nullable(),
   currencyCode: currency,
   soldAt: z.coerce.date().optional(),
-  lines: z.array(z.object({ catalogItemId: id, quantity: positiveQuantity })).min(1).max(200),
+  lines: z.array(z.object({ catalogItemId: id, quantity: retailSaleQuantitySchema })).min(1).max(200),
 });
 
 export const retailReturnCreateSchema = z.object({

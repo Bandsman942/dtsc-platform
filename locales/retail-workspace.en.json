@@ -136,6 +136,7 @@
   "noItemFoundDescription": "Try another name, SKU or code.",
   "basket": "Basket",
   "quantityShort": "Qty",
+  "posQuantityUnit": "Enter a positive quantity that matches the item’s unit, up to 1,000,000.",
   "unitPrice": "Unit price",
   "discount": "Discount",
   "emptyBasket": "Empty basket",

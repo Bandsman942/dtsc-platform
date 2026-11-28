@@ -10,6 +10,7 @@
 - Contrepassations Mobile Money et change. Les mouvements de caisse et de float et l’écriture de contrepassation sont enregistrés ensemble. Un refus comptable annule toute la tentative.
 - Confirmation Mobile Money connectée. La réponse distingue une confirmation de l’opérateur d’un enregistrement local encore en attente. La reprise utilise la demande confirmée et ne renvoie pas l’opération à l’opérateur.
 - Trésorerie. L’historique affiche et exporte le solde opérationnel vérifié d’un compte à la date demandée, dans le fuseau de l’entreprise. Le solde est indiqué comme indisponible si l’historique ne permet pas de le confirmer.
+- POS. Le pas de saisie des quantités suit l’unité du produit. L’aperçu tarifaire, la vente et la préparation de facture refusent les fractions incompatibles avant tout mouvement de stock.
 - Stock : la saisie des transferts, comptages et ajustements suit la précision de l’unité catalogue. Lecture exacte des valeurs historiques et contrôle de la précision du produit lors des conversions.
 - Trésorerie : sous-totaux de l’historique par devise, statut et sens, avec comparaison du filtré, du général et de la page. Filtres et synthèses des exports partagent les calculs serveur.
 - Dépenses : sous-totaux et exports par devise et statut, calculés dans le périmètre autorisé du registre.

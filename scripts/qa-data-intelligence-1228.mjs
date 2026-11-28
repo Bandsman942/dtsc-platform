@@ -22,6 +22,17 @@ const { requireInventoryQuantity: quantity, addInventoryQuantities: add, convert
 const { formatInventoryQuantity: format, inventoryQuantityExportValue: exportQuantity } = load("lib/enterprise/inventory/quantity-display.ts");
 const { planFefoLots, readReservationLotAllocations } = load("lib/enterprise/inventory/lot-allocation.ts");
 const { Decimal } = Prisma;
+const { retailSaleCreateSchema } = load("lib/enterprise/retail/schemas.ts");
+
+const posPayload = {
+  warehouseId: "warehouse", currencyCode: "CDF", idempotencyKey: "pos-unit-precision",
+  lines: [{ catalogItemId: "product", quantity: "1.000001", unitPrice: 100 }],
+  tenders: [{ methodType: "CASH", financialAccountId: "cash-account", amount: 100 }],
+};
+assert.equal(new Decimal(retailSaleCreateSchema.parse(posPayload).lines[0].quantity).toFixed(), "1.000001");
+for (const invalid of ["1.0000001", "1.00000000000000001", "1e1000000000", "1e-1000000000", "0x11"]) {
+  assert.equal(retailSaleCreateSchema.safeParse({ ...posPayload, lines: [{ ...posPayload.lines[0], quantity: invalid }] }).success, false);
+}
 
 for (let scale = 0; scale <= 6; scale++) {
   const valid = scale === 0 ? "2" : `2.${"0".repeat(scale - 1)}1`;

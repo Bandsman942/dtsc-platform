@@ -136,6 +136,7 @@
   "noItemFoundDescription": "Essayez un autre nom, SKU ou code.",
   "basket": "Panier",
   "quantityShort": "Qté",
+  "posQuantityUnit": "Saisissez une quantité positive compatible avec l’unité de l’article, jusqu’à 1 000 000.",
   "unitPrice": "Prix unitaire",
   "discount": "Remise",
   "emptyBasket": "Panier vide",
