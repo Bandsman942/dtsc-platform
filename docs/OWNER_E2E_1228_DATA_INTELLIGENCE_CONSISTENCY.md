@@ -25,6 +25,8 @@ La recette concerne la PR #1229 et la version candidate 1.24.5. Exécuter les sc
 
 ## Filtres, exports et droits
 
+Dans **Clôture magasin → Rapport journalier des stocks**, choisir une boutique et une date avec des réceptions et des ventes de part et d’autre de minuit. Rechercher un article de façon à répartir le résultat sur deux pages. Les totaux filtré et boutique restent stables, le sous-total de page change. Comparer le détail et les deux totaux dans le CSV, le classeur et l’aperçu PDF avec le français puis l’anglais. Une date antérieure ne présente pas les réservations actuelles.
+
 1. Filtrer par boutique, période exacte puis intervalle, statut et texte métier. Relever le nombre de résultats, le sous-total filtré et le sous-total de page. Changer de page, y compris vers un résultat vide. Le sous-total filtré doit rester identique et le général doit rester borné aux droits de l’acteur.
 2. Reprendre le même jeu de filtres sur Stock, Ventes, Achats, Factures, Créances, Dettes, Paiements, Trésorerie, Caisse et Comptabilité. Vérifier que les totaux par devise sont distincts et que les entrées et sorties de trésorerie restent attribuées à leurs comptes. Vérifier les agrégats sectoriels applicables dans le périmètre de l’organisation.
 3. Exporter les mêmes résultats en CSV, XLSX et PDF lorsqu’ils sont proposés sur le registre. Rapprocher le nombre de lignes, les filtres, les sous-totaux, les libellés et les devises. Les quantités dépassant la précision numérique d’Excel doivent rester exactes dans les cellules.

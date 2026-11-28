@@ -1,6 +1,7 @@
 import { workflowTestLoader } from "./lib/workflow-test-loader.mjs";
 import assert from "node:assert/strict";
 import { PrismaClient } from "@prisma/client";
+import ExcelJS from "exceljs";
 import { randomUUID } from "node:crypto";
 
 // Run after migrate deploy on the isolated CI DB. Fixture writes are rolled back.
@@ -30,6 +31,112 @@ const {GET:inventoryGet}=workflowTestLoader({
       })("@/app/api/enterprise/[organizationId]/inventory/route");
 console.log(`#1228 test handler loading outside PostgreSQL transaction: ${(performance.now()-handlerLoadStarted).toFixed(0)}ms`);
 const treasuryFixture = { reader: null, organizationId: "", actor: "" };
+const dailyStockFixture = { reader: null, organizationId: "", siteId: "", actor: "" };
+const { GET: getDailyStockReport } = workflowTestLoader({
+  "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
+    assert.equal(options.isolationLevel, "RepeatableRead");
+    return callback(dailyStockFixture.reader);
+  } } },
+  "@/lib/audit": { writeApiLog: async () => {} },
+  "@/lib/enterprise/organization-logo-storage": { resolveOrganizationLogoStoragePath: () => null },
+  "@/lib/enterprise/retail/site-access": { retailInventoryVisibleSites: async (organizationId, actor, tx) => {
+    assert.equal(organizationId, dailyStockFixture.organizationId);
+    assert.equal(actor, dailyStockFixture.actor);
+    assert.equal(tx, dailyStockFixture.reader);
+    return { isolationEnabled: true, siteIds: [dailyStockFixture.siteId] };
+  } },
+  "@/lib/enterprise/retail/http": {
+    authorizeRetailRequest: async (_req, organizationId, feature, action) => {
+      assert.equal(feature, "RETAIL_DAILY_CLOSE");
+      assert.equal(action, "read");
+      return organizationId === dailyStockFixture.organizationId
+        ? { ok: true, session: { userId: dailyStockFixture.actor } }
+        : { ok: false, response: new Response(null, { status: 403 }) };
+    },
+    retailErrorResponse: error => new Response(null, { status: error.statusCode || error.status || 500 }),
+  },
+})("@/app/api/enterprise/[organizationId]/retail/daily-close/stock-report/route");
+
+async function verifyDailyStockReport(tenant, otherTenant, actor) {
+  await assert.rejects(db.$transaction(async tx => {
+    const organizationId = tenant;
+    await tx.organization.create({ data: { id: tenant, name: "QA daily stock", status: "ACTIVE", timezone: "Africa/Kinshasa" } });
+    await tx.enterpriseRetailConfiguration.create({ data: { organizationId, createdByUserId: actor } });
+    const site = await tx.enterpriseSite.create({ data: { organizationId, code: "DAY-A", name: "QA A", siteType: "STORE", timezone: "Africa/Kinshasa", createdByUserId: actor } });
+    const inaccessibleSite = await tx.enterpriseSite.create({ data: { organizationId, code: "DAY-B", name: "QA B", siteType: "STORE", createdByUserId: actor } });
+    const warehouse = await tx.enterpriseWarehouse.create({ data: { organizationId, siteId: site.id, code: "DAY-A", name: "QA WH A", createdByUserId: actor } });
+    const excludedWarehouse = await tx.enterpriseWarehouse.create({ data: { organizationId, siteId: inaccessibleSite.id, code: "DAY-B", name: "QA WH B", createdByUserId: actor } });
+    const unit = await tx.enterpriseUnitOfMeasure.create({ data: { organizationId, code: "DAY-U", name: "Test unit", symbol: "kg", decimalScale: 6 } });
+    const products = Array.from({ length: 12 }, (_, index) => {
+      const code = index === 11 ? "BETA" : "ALPHA-" + String(index).padStart(2, "0");
+      return { code, name: code, catalogItemId: tenant + "-day-catalog-" + index, itemId: tenant + "-day-stock-" + index };
+    });
+    await tx.enterpriseCatalogItem.createMany({ data: products.map(({ code, name, catalogItemId }) => ({
+      id: catalogItemId, organizationId, code, name, normalizedName: name.toLowerCase(), itemType: "PRODUCT", unitOfMeasureId: unit.id, createdByUserId: actor,
+    })) });
+    await tx.enterpriseInventoryItem.createMany({ data: products.map(({ itemId, catalogItemId }) => ({
+      id: itemId, catalogItemId, organizationId, createdAt: new Date("2026-11-01"), createdByUserId: actor,
+    })) });
+    const beforeDate = new Date("2026-11-22T22:59:59.999Z");
+    const base = { organizationId, warehouseId: warehouse.id, createdByUserId: actor };
+    await tx.enterpriseStockMovement.createMany({ data: [
+      ...products.map(({ itemId, code }, index) => ({
+        ...base, inventoryItemId: itemId, direction: "IN", movementType: "PURCHASE_RECEIPT", occurredAt: beforeDate,
+        quantity: index === 0 ? "999999999999999.999999" : index === 11 ? "3" : "1", idempotencyKey: code + "-opening",
+      })),
+      { ...base, inventoryItemId: products[0].itemId, direction: "OUT", movementType: "SALE_FULFILLMENT",
+        occurredAt: new Date("2026-11-22T23:00:00.000Z"), quantity: "0.000001", idempotencyKey: "date-sale" },
+      { ...base, inventoryItemId: products[0].itemId, direction: "IN", movementType: "PURCHASE_RECEIPT",
+        occurredAt: new Date("2026-11-23T23:00:00.000Z"), quantity: "9", idempotencyKey: "next-day" },
+      { ...base, warehouseId: excludedWarehouse.id, inventoryItemId: products[0].itemId, direction: "IN", movementType: "PURCHASE_RECEIPT",
+        occurredAt: beforeDate, quantity: "99", idempotencyKey: "other-store" },
+    ] });
+    Object.assign(dailyStockFixture, { reader: tx, organizationId, actor, siteId: site.id });
+    const read = (extra, org = organizationId, store = site.id) => getDailyStockReport(
+      new Request(`http://localhost/api/enterprise/${org}/retail/daily-close/stock-report?siteId=${store}&date=2026-11-23&pageSize=10&search=ALPHA&${extra}`),
+      { params: Promise.resolve({ organizationId: org }) },
+    );
+    const response = await read("page=1");
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "private, no-store");
+    const first = await response.json();
+    const second = await (await read("page=2")).json();
+    const empty = await (await read("page=3")).json();
+    assert.equal(first.total, 11);
+    assert.equal(second.rows.length, 1);
+    assert.equal(first.rows[0].closing, "999999999999999.999998");
+    assert.equal(first.rows[0].reserved, null);
+    assert.equal(first.filteredTotals[0].closing, "1000000000000009.999998");
+    assert.equal(first.generalTotals[0].closing, "1000000000000012.999998");
+    assert.equal(first.pageTotals[0].closing, "1000000000000008.999998");
+    assert.equal(second.pageTotals[0].closing, "1.000000");
+    assert.deepEqual(empty.filteredTotals, first.filteredTotals);
+    assert.deepEqual(empty.generalTotals, first.generalTotals);
+    assert.deepEqual(empty.pageTotals, []);
+    assert.equal((await read("page=1", organizationId, inaccessibleSite.id)).status, 403);
+    assert.equal((await read("page=1", otherTenant)).status, 403);
+    const csv = await (await read("format=csv&page=2")).text();
+    assert.match(csv, /999999999999999\.999998/);
+    assert.match(csv, /1000000000000009\.999998/);
+    assert.match(csv, /1000000000000012\.999998/);
+    assert.doesNotMatch(csv, /Sous-total de la page|BETA/);
+    const xlsx = await read("format=xlsx&locale=en&page=2");
+    assert.equal(xlsx.status, 200);
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(Buffer.from(await xlsx.arrayBuffer()));
+    const sheet = workbook.getWorksheet("Daily inventory");
+    assert.equal(sheet.getCell("G6").value, "999999999999999.999998");
+    assert.equal(sheet.getCell("B17").value, "Filtered subtotal (kg)");
+    assert.equal(sheet.getCell("G17").value, "1000000000000009.999998");
+    assert.equal(sheet.getCell("B18").value, "Store total without search (kg)");
+    assert.equal(sheet.getCell("G18").value, "1000000000000012.999998");
+    const print = await (await read("format=print&locale=en&page=2")).text();
+    assert.match(print, /<html lang="en">/);
+    assert.match(print, /1000000000000012\.999998/);
+    throw new RollbackFixture();
+  }, { isolationLevel: "RepeatableRead", timeout: 10000 }), RollbackFixture);
+  console.log("PASS #1228 PostgreSQL daily stock: last micro-unit, store/date scope, independent page, CSV/XLSX/print totals");
+}
 const { GET: getTreasuryHistory } = workflowTestLoader({
   "@/lib/prisma": { prisma: { $transaction: async (callback, options) => {
     assert.equal(options.isolationLevel, "RepeatableRead");
@@ -1288,6 +1395,7 @@ try {
   await verifyConnectedMobileMoney(tenant, actor);
   await verifyAssetRegisterAmounts(tenant, otherTenant, actor);
   await verifyTreasuryBalanceAt(tenant, otherTenant, actor);
+  await verifyDailyStockReport(tenant, otherTenant, actor);
   await verifyLedgerSearch(tenant, otherTenant, actor);
   try {
     await db.$transaction(async tx => {
